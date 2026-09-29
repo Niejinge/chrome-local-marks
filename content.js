@@ -89,9 +89,10 @@
       .quick-settings{--editor-ink:#f0f5f7;--editor-muted:#c4d0d6;--editor-line:#647885;width:min(320px,calc(100vw - 40px));flex-basis:100%;max-height:50vh;overflow:auto}.quick-settings.hidden{display:none}
       @media(prefers-reduced-motion:reduce){.quick,.quick-mode-menu,.mark-submenu{transition:none;translate:none}}
       .panel,.overlay{display:none!important}
-      .launcher{right:0;top:76%;width:36px!important;min-width:36px;height:38px;padding:0!important;display:grid;place-items:center;overflow:hidden;border-radius:10px 0 0 10px}
-      .launcher svg{display:block;width:20px;height:20px;margin:0}
-      .launcher.left{right:auto;left:0;border-radius:0 10px 10px 0}
+      .launcher{right:0;top:76%;width:30px!important;min-width:30px;height:36px;padding:0!important;display:grid;place-items:center;overflow:hidden;border-radius:9px 0 0 9px}
+      .launcher svg{display:block;width:18px;height:18px;margin:0;transform:translateX(3px)}
+      .launcher.left{right:auto;left:0;border-radius:0 9px 9px 0}
+      .launcher.left svg{transform:translateX(-3px)}
       .quick.open{display:flex;flex-wrap:wrap;max-width:min(340px,calc(100vw - 24px))}.quick-note-preview{flex-basis:100%;max-height:5.4em;overflow:hidden;white-space:pre-wrap;text-align:left!important;line-height:1.6;display:-webkit-box!important;-webkit-line-clamp:3;-webkit-box-orient:vertical}
       .quick-note-preview[hidden]{display:none!important}.quick.preview-only>button:not(.quick-note-preview),.quick.preview-only .quick-mode-menu{display:none!important}
       @media(prefers-color-scheme:dark){.launcher{color:#92ded7;background:#23292e;border-color:#647079}}
