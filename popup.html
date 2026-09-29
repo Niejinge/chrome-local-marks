@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>本地网页标记</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <div class="brand"><span class="logo">◇</span><div><h1>本地网页标记</h1><p>数据仅保存在当前浏览器</p></div></div>
+    <button id="page-bookmark" type="button">收藏当前网页</button>
+  </header>
+  <main>
+    <details class="backup" id="backup-panel">
+      <summary>备份与迁移</summary>
+      <p>标记只存在本机。导出文件含网址、选中文字和笔记，请妥善保存。</p>
+      <div class="backup-actions"><button id="export-data" type="button">导出 JSON</button><button id="import-data" type="button">导入 JSON</button></div>
+      <label class="backup-option"><input id="import-styles" type="checkbox"> 同时恢复标记样式（覆盖本机样式）</label>
+      <input id="import-file" type="file" accept=".json,application/json" hidden>
+      <p class="backup-status" id="backup-status" role="status" aria-live="polite"></p>
+    </details>
+    <input id="search" type="search" placeholder="搜索网页、原文或笔记" aria-label="搜索全部标记">
+    <div class="filters" id="filters">
+      <button class="active" data-filter="all">全部</button>
+      <button data-filter="page">网页</button>
+      <button data-filter="bookmark">书签</button>
+      <button data-filter="highlight">重点</button>
+      <button data-filter="underline">下划线</button>
+      <button data-filter="note">笔记</button>
+    </div>
+    <p class="summary" id="summary"></p>
+    <ul id="records"></ul>
+  </main>
+  <footer><span>选中网页文字即可标记</span><button id="open-page-panel" type="button">打开本页面板</button></footer>
+  <script src="backup.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

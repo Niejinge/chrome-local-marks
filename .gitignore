@@ -1,0 +1,11 @@
+.DS_Store
+.env*
+__pycache__/
+*.py[cod]
+node_modules/
+*.zip
+*.crx
+*.pem
+*.key
+*.log
+dist/
