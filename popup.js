@@ -1,6 +1,8 @@
 const STORAGE_KEY = "readerMarksV1";
-const STYLE_KEY = "readerMarksStyleV2";
+const STYLE_KEY = "readerMarksStyleV3";
+const PREVIOUS_STYLE_KEY = "readerMarksStyleV2";
 const LEGACY_STYLE_KEY = "readerMarksStyleV1";
+const GROUPING_KEY = "readerMarksGroupingV1";
 const search = document.getElementById("search");
 const recordsList = document.getElementById("records");
 const summary = document.getElementById("summary");
@@ -12,6 +14,11 @@ const backupStatus = document.getElementById("backup-status");
 let records = [];
 let activeTab = null;
 let activeFilter = "all";
+let currentPageOnly = !new URLSearchParams(location.search).has("library");
+const grouping = document.getElementById("grouping");
+const collapsedGroups = new Set();
+const clearConfirmation = document.getElementById("clear-confirmation");
+let clearSnapshot = [];
 
 function setBackupStatus(message, isError = false) {
   backupStatus.textContent = message;
@@ -20,8 +27,13 @@ function setBackupStatus(message, isError = false) {
 
 document.getElementById("export-data").addEventListener("click", async () => {
   try {
-    const data = await chrome.storage.local.get([STORAGE_KEY, STYLE_KEY, LEGACY_STYLE_KEY]);
-    const contents = LocalMarksBackup.create(data[STORAGE_KEY] || [], data[STYLE_KEY] || null, data[LEGACY_STYLE_KEY] || null);
+    const data = await chrome.storage.local.get([STORAGE_KEY, STYLE_KEY, PREVIOUS_STYLE_KEY, LEGACY_STYLE_KEY]);
+    const exportedStyles = data[STYLE_KEY]
+      ? LocalMarksStyles.normalize(data[STYLE_KEY])
+      : data[PREVIOUS_STYLE_KEY] || data[LEGACY_STYLE_KEY]
+        ? LocalMarksStyles.migrate(data[PREVIOUS_STYLE_KEY], data[LEGACY_STYLE_KEY])
+        : null;
+    const contents = LocalMarksBackup.create(data[STORAGE_KEY] || [], exportedStyles);
     const url = URL.createObjectURL(new Blob([contents], { type: "application/json" }));
     const link = document.createElement("a");
     link.href = url;
@@ -79,8 +91,7 @@ function labels(item) {
   const result = [];
   if (item.kind === "page") result.push("网页");
   if (item.isBookmark) result.push("书签");
-  if (item.highlightColor) result.push("重点");
-  if (item.underlineColor) result.push(item.underlineStyle === "wavy" ? "波浪线" : "下划线");
+  if (item.highlightColor || item.underlineColor) result.push("标注");
   if (item.note) result.push("笔记");
   return result;
 }
@@ -89,8 +100,7 @@ function filterMatches(item) {
   if (activeFilter === "all") return true;
   if (activeFilter === "page") return item.kind === "page";
   if (activeFilter === "bookmark") return Boolean(item.isBookmark);
-  if (activeFilter === "highlight") return Boolean(item.highlightColor);
-  if (activeFilter === "underline") return Boolean(item.underlineColor);
+  if (activeFilter === "mark") return Boolean(item.highlightColor || item.underlineColor);
   if (activeFilter === "note") return Boolean(item.note);
   return true;
 }
@@ -122,10 +132,16 @@ function renderPageButton() {
 function render() {
   const query = search.value.trim().toLowerCase();
   const filtered = records
+    .filter(item => !currentPageOnly || (activeTab && normalizedUrl(item.url) === normalizedUrl(activeTab.url)))
     .filter(filterMatches)
     .filter((item) => !query || `${item.title || ""} ${item.quote || ""} ${item.note || ""} ${item.url || ""}`.toLowerCase().includes(query))
-    .sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
-  summary.textContent = `${records.length} 条本地记录${filtered.length === records.length ? "" : ` · 当前显示 ${filtered.length} 条`}`;
+    .sort((a, b) => currentPageOnly ? (a.start ?? Infinity) - (b.start ?? Infinity) : new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
+  grouping.closest("label").hidden = currentPageOnly;
+  document.getElementById("scope-current").classList.toggle("active", currentPageOnly);
+  document.getElementById("scope-all").classList.toggle("active", !currentPageOnly);
+  const groupCount = LocalMarksGroups.groupRecords(filtered, grouping.value).length;
+  summary.textContent = currentPageOnly ? `本页 ${filtered.length} 条记录 · 按正文顺序` : `${records.length} 条本地记录 · 显示 ${filtered.length} 条${grouping.value === "none" ? "" : ` · ${groupCount} 组`}`;
+  document.getElementById("clear-all").disabled = records.length === 0;
   recordsList.replaceChildren();
   if (!filtered.length) {
     const empty = document.createElement("li");
@@ -135,7 +151,7 @@ function render() {
     renderPageButton();
     return;
   }
-  filtered.forEach((item) => {
+  const createItem = (item) => {
     const li = document.createElement("li");
     li.className = "record";
     const open = document.createElement("button");
@@ -144,7 +160,7 @@ function render() {
     const site = document.createElement("span");
     site.className = "site";
     const siteName = document.createElement("span");
-    siteName.textContent = hostname(item.url);
+    siteName.textContent = grouping.value === "site" ? item.title || item.url : hostname(item.url);
     site.appendChild(siteName);
     const badges = document.createElement("span");
     badges.className = "badges";
@@ -168,22 +184,24 @@ function render() {
     date.className = "date";
     date.textContent = formatDate(item.updatedAt || item.createdAt);
     open.appendChild(date);
-    open.addEventListener("click", () => {
-      chrome.runtime.sendMessage({ type: "LOCAL_MARKS_OPEN_RECORD", record: item });
-      window.close();
+    open.addEventListener("click", async () => {
+      const result = await chrome.runtime.sendMessage({ type: "LOCAL_MARKS_OPEN_RECORD", record: item });
+      if (item.kind === "selection") window.dispatchEvent(new CustomEvent("marks-select", { detail: {item, tabId:result?.tabId} }));
     });
     const remove = document.createElement("button");
     remove.className = "delete";
     remove.type = "button";
     remove.textContent = "删除";
     remove.addEventListener("click", async () => {
-      records = records.filter((record) => record.id !== item.id);
+      const latest = await chrome.storage.local.get(STORAGE_KEY);
+      records = (latest[STORAGE_KEY] || []).filter((record) => record.id !== item.id);
       await chrome.storage.local.set({ [STORAGE_KEY]: records });
       render();
     });
     li.append(open, remove);
-    recordsList.appendChild(li);
-  });
+    return li;
+  };
+  LocalMarksGroups.render(recordsList, filtered, currentPageOnly ? "none" : grouping.value, createItem, collapsedGroups, Boolean(query));
   renderPageButton();
 }
 
@@ -201,6 +219,47 @@ pageButton.addEventListener("click", async () => {
 });
 
 search.addEventListener("input", render);
+grouping.addEventListener("change", async () => {
+  render();
+  await chrome.storage.local.set({ [GROUPING_KEY]: grouping.value });
+});
+document.getElementById("clear-all").addEventListener("click", async () => {
+  try {
+    const current = await chrome.storage.local.get(STORAGE_KEY);
+    clearSnapshot = (current[STORAGE_KEY] || []).map((item) => item.id);
+    if (!clearSnapshot.length) return setBackupStatus("当前没有可清空的标记。");
+    document.getElementById("clear-description").textContent = `将清空所有网页的 ${clearSnapshot.length} 条记录，包含文字标记、笔记及网页收藏。此操作无法撤销。`;
+    clearConfirmation.hidden = false;
+    document.getElementById("clear-cancel").focus();
+  } catch (error) {
+    setBackupStatus(`读取失败：${error.message}`, true);
+  }
+});
+document.getElementById("clear-cancel").addEventListener("click", () => {
+  clearConfirmation.hidden = true;
+  clearSnapshot = [];
+  document.getElementById("clear-all").focus();
+});
+document.getElementById("clear-confirm").addEventListener("click", async () => {
+  if (!clearSnapshot.length) return;
+  const button = document.getElementById("clear-confirm");
+  button.disabled = true;
+  try {
+    const current = await chrome.storage.local.get(STORAGE_KEY);
+    const ids = new Set(clearSnapshot);
+    const remaining = (current[STORAGE_KEY] || []).filter((item) => !ids.has(item.id));
+    await chrome.storage.local.set({ [STORAGE_KEY]: remaining });
+    records = remaining;
+    clearSnapshot = [];
+    clearConfirmation.hidden = true;
+    render();
+    setBackupStatus(remaining.length ? "已清空确认范围内的标记，保留了新添加的记录。" : "已清空所有标记。");
+  } catch (error) {
+    setBackupStatus(`清空失败：${error.message}`, true);
+  } finally {
+    button.disabled = false;
+  }
+});
 filters.addEventListener("click", (event) => {
   const button = event.target.closest("[data-filter]");
   if (!button) return;
@@ -209,25 +268,33 @@ filters.addEventListener("click", (event) => {
   render();
 });
 
-document.getElementById("open-page-panel").addEventListener("click", async () => {
-  if (!activeTab || !isSupported(activeTab.url)) return;
-  try {
-    await chrome.tabs.sendMessage(activeTab.id, { type: "LOCAL_MARKS_OPEN_PANEL" });
-    window.close();
-  } catch (_) {
-    pageButton.textContent = "刷新网页后再试";
-  }
+document.getElementById("open-page-panel").addEventListener("click", () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL("popup.html?library=1") });
 });
+document.getElementById("scope-current").addEventListener("click", () => { currentPageOnly = true; render(); });
+document.getElementById("scope-all").addEventListener("click", () => { currentPageOnly = false; render(); });
+async function updateActiveTab() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  activeTab = tab || null;
+  render();
+}
+chrome.tabs.onActivated?.addListener(updateActiveTab);
+chrome.tabs.onUpdated?.addListener((id, info) => { if (id === activeTab?.id && (info.url || info.status === "complete")) updateActiveTab(); });
 
 async function init() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   activeTab = tab || null;
-  const result = await chrome.storage.local.get(STORAGE_KEY);
+  const result = await chrome.storage.local.get([STORAGE_KEY, GROUPING_KEY]);
+  grouping.value = ["page", "site", "none"].includes(result[GROUPING_KEY]) ? result[GROUPING_KEY] : "page";
   records = Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
   render();
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes[GROUPING_KEY]) {
+    grouping.value = ["page", "site", "none"].includes(changes[GROUPING_KEY].newValue) ? changes[GROUPING_KEY].newValue : "page";
+    render();
+  }
   if (area === "local" && changes[STORAGE_KEY]) {
     records = changes[STORAGE_KEY].newValue || [];
     render();

@@ -1,6 +1,7 @@
 "use strict";
 
 const LocalMarksBackup = (() => {
+  const Styles = typeof LocalMarksStyles !== "undefined" ? LocalMarksStyles : require("./mark-styles.js");
   const FORMAT = "local-reader-marks-backup";
   const VERSION = 1;
   const MAX_RECORDS = 30000;
@@ -72,27 +73,19 @@ const LocalMarksBackup = (() => {
     };
   }
 
-  function style(source, max) {
+  function style(source, max, legacyLineStyle = false) {
     if (!source || typeof source !== "object" || Array.isArray(source) || !color(source.color)) throw new Error("备份中的样式设置无效");
     return {
       color: source.color,
       thickness: number(source.thickness, 1, max, 1),
       opacity: number(source.opacity, 10, 100, 100),
-      ...(max === 8 ? { lineStyle: source.lineStyle === "wavy" ? "wavy" : "solid" } : {})
+      ...(legacyLineStyle ? { lineStyle: source.lineStyle === "wavy" ? "wavy" : "solid" } : {})
     };
   }
 
   function stylesFromLegacy(source) {
     if (!source || typeof source !== "object" || Array.isArray(source)) return null;
-    return {
-      bookmark: { color: "#ef6a5b", thickness: 4, opacity: 100 },
-      highlight: {
-        color: color(source.color) || "#f2bd55",
-        thickness: number(source.thickness, 3, 30, 15),
-        opacity: 100
-      },
-      underline: { color: "#6f91e8", thickness: 2, opacity: 100, lineStyle: "solid" }
-    };
+    return Styles.migrate(null, source, false);
   }
 
   function parse(text) {
@@ -109,11 +102,23 @@ const LocalMarksBackup = (() => {
     const records = source.records.map(record);
     const ids = new Set(records.map((item) => item.id));
     if (ids.size !== records.length) throw new Error("备份中存在重复的记录 ID");
-    const styles = source.styles == null ? stylesFromLegacy(source.legacyStyles) : {
-      bookmark: style(source.styles.bookmark, 10),
-      highlight: style(source.styles.highlight, 30),
-      underline: style(source.styles.underline, 8)
-    };
+    let styles = null;
+    if (source.styles == null) styles = stylesFromLegacy(source.legacyStyles);
+    else if (source.styleVersion === 3) {
+      styles = {
+        bookmark: style(source.styles.bookmark, 10),
+        highlight: style(source.styles.highlight, 30),
+        "underline-solid": style(source.styles["underline-solid"], 8),
+        "underline-wavy": style(source.styles["underline-wavy"], 8)
+      };
+    } else {
+      const previous = {
+        bookmark: style(source.styles.bookmark, 10),
+        highlight: style(source.styles.highlight, 30),
+        underline: style(source.styles.underline, 8, true)
+      };
+      styles = Styles.migrate(previous, null, false);
+    }
     return { records, styles };
   }
 
@@ -140,7 +145,7 @@ const LocalMarksBackup = (() => {
   }
 
   function create(records, styles, legacyStyles = null) {
-    return JSON.stringify({ format: FORMAT, schemaVersion: VERSION, exportedAt: new Date().toISOString(), records, styles, legacyStyles: styles ? null : legacyStyles }, null, 2);
+    return JSON.stringify({ format: FORMAT, schemaVersion: VERSION, styleVersion: styles ? 3 : null, exportedAt: new Date().toISOString(), records, styles, legacyStyles: styles ? null : legacyStyles }, null, 2);
   }
 
   return { parse, merge, create };

@@ -1,6 +1,8 @@
 import json
 import pathlib
+import tempfile
 import unittest
+from unittest import mock
 from package_release import RELEASE_FILES
 
 
@@ -16,7 +18,7 @@ class ExtensionTests(unittest.TestCase):
 
     def test_manifest_v3_and_local_permissions(self):
         self.assertEqual(self.manifest["manifest_version"], 3)
-        self.assertEqual(self.manifest["version"], "0.4.0")
+        self.assertEqual(self.manifest["version"], "0.5.7")
         self.assertIn("storage", self.manifest["permissions"])
         self.assertNotIn("tabs", self.manifest["permissions"])
         self.assertNotIn("identity", self.manifest["permissions"])
@@ -61,31 +63,29 @@ class ExtensionTests(unittest.TestCase):
         for token in ["quick-edit", "edit-overlay", "edit-style-editor", "saveEditedStyle", "data-edit-mode"]:
             self.assertIn(token, self.content)
 
-    def test_hover_opens_quick_actions_without_losing_note_preview(self):
-        for token in [
-            'document.addEventListener("mouseover"',
-            'showQuick(mark, true)',
-            'quick.addEventListener("mouseenter", cancelQuickHide)',
-            'quick.addEventListener("mouseleave", scheduleQuickHide)',
-            'if (previewNote) showNoteTooltip(mark, true)',
-        ]:
+    def test_native_side_panel_and_fixed_hover_delays(self):
+        self.assertIn("sidePanel", self.manifest["permissions"])
+        self.assertEqual(self.manifest["side_panel"]["default_path"], "popup.html")
+        self.assertNotIn("default_popup", self.manifest["action"])
+        for token in ["}, 700)", "300)", "}, 250)", "prefers-reduced-motion", "opacity 140ms"]:
             self.assertIn(token, self.content)
 
     def test_page_bookmarks_are_visible_across_pages(self):
         for token in ["panel-view-tabs", 'data-panel-view="pages"', 'records.filter((item) => item.kind === "page")', "LOCAL_MARKS_OPEN_RECORD"]:
             self.assertIn(token, self.content)
 
-    def test_popup_can_filter_underlines(self):
+    def test_popup_combines_annotation_filters(self):
         popup_html = (ROOT / "popup.html").read_text(encoding="utf-8")
-        self.assertIn('data-filter="underline"', popup_html)
-        self.assertIn('activeFilter === "underline"', self.popup)
-        self.assertIn("item.underlineColor", self.popup)
+        self.assertIn('data-filter="mark">标注', popup_html)
+        self.assertIn('activeFilter === "mark"', self.popup)
+        self.assertIn("item.highlightColor || item.underlineColor", self.popup)
 
     def test_legacy_style_settings_are_migrated(self):
         self.assertIn('readerMarksStyleV1', self.content)
         self.assertIn('readerMarksStyleV2', self.content)
         self.assertIn("normalizeStyles", self.content)
-        self.assertIn("if (!saved?.highlight && legacy.color)", self.content)
+        self.assertIn("LocalMarksStyles.migrate", self.content)
+        self.assertIn("readerMarksStyleV3", self.content)
 
     def test_storage_is_local_only(self):
         combined = self.content + self.popup
@@ -118,7 +118,7 @@ class ExtensionTests(unittest.TestCase):
         self.assertNotIn('output.textContent = `${config.thickness}px`', self.content)
 
     def test_note_hover_preview_is_clamped(self):
-        for token in ["note-tooltip", "showNoteTooltip", "hideNoteTooltip", "note-tooltip.truncated::after", "scrollHeight > noteTooltip.clientHeight", 'document.addEventListener("mouseover"', 'document.addEventListener("mouseout"']:
+        for token in ["note-tooltip", "showNoteTooltip", "hideNoteTooltip", "note-tooltip.truncated::after", "-webkit-line-clamp:3", 'document.addEventListener("mouseover"', 'document.addEventListener("mouseout"']:
             self.assertIn(token, self.content)
 
     def test_duplicate_text_uses_fuzzy_context_and_position_fallback(self):
@@ -145,6 +145,27 @@ class ExtensionTests(unittest.TestCase):
             self.assertNotEqual(path.name, ".DS_Store", str(path))
         self.assertNotIn("test_chrome_local_marks.py", RELEASE_FILES)
         self.assertNotIn("README.md", RELEASE_FILES)
+
+    def test_package_builds_clean_unpacked_install_directory(self):
+        import package_release
+
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary_root = pathlib.Path(temporary)
+            source_root = temporary_root / "source"
+            source_root.mkdir()
+            for relative in RELEASE_FILES:
+                source = ROOT / relative
+                destination = source_root / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(source.read_bytes())
+            (source_root / "__pycache__").mkdir()
+            (source_root / "test-only.py").write_text("", encoding="utf-8")
+            with mock.patch.object(package_release, "ROOT", source_root):
+                package_release.main()
+            install_dir = source_root / "dist" / "chrome-local-marks-unpacked"
+            actual = {str(path.relative_to(install_dir)) for path in install_dir.rglob("*") if path.is_file()}
+            self.assertEqual(actual, set(RELEASE_FILES))
+            self.assertFalse(any(part.startswith("_") for path in actual for part in pathlib.PurePosixPath(path).parts))
 
     def test_shadow_ui_clicks_are_not_closed_on_mousedown(self):
         self.assertIn('if (event.composedPath().includes(host)) return;', self.content)

@@ -13,14 +13,20 @@ const page = { id: 'two', kind: 'page', url: 'https://example.com/', title: 'Exa
 const styles = {
   bookmark: { color: '#ef6a5b', thickness: 4, opacity: 100 },
   highlight: { color: '#f2bd55', thickness: 15, opacity: 80 },
-  underline: { color: '#6f91e8', thickness: 2, opacity: 100, lineStyle: 'wavy' }
+  'underline-solid': { color: '#6f91e8', thickness: 3, opacity: 100 },
+  'underline-wavy': { color: '#a78bfa', thickness: 5, opacity: 65 }
 };
 
 const parsed = backup.parse(backup.create([selection, page], styles));
 assert.equal(parsed.records.length, 2);
 assert.equal(parsed.records[0].note, 'My note');
-assert.equal(parsed.styles.underline.lineStyle, 'wavy');
+assert.equal(parsed.styles['underline-wavy'].thickness, 5);
+assert.equal(parsed.styles['underline-solid'].thickness, 3);
 assert.equal(backup.parse(backup.create([], null, { color: '#ef6a5b', thickness: 22 })).styles.highlight.thickness, 22);
+const oldBackup = JSON.stringify({format:'local-reader-marks-backup',schemaVersion:1,records:[],styles:{bookmark:styles.bookmark,highlight:styles.highlight,underline:{color:'#a78bfa',thickness:6,opacity:55,lineStyle:'wavy'}}});
+const oldStyles = backup.parse(oldBackup).styles;
+assert.equal(oldStyles['underline-wavy'].thickness, 6);
+assert.equal(oldStyles['underline-solid'].thickness, 3);
 const merged = backup.merge([selection], parsed.records);
 assert.equal(merged.added, 1);
 assert.equal(merged.skipped, 1);
