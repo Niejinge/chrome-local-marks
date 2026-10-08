@@ -435,8 +435,28 @@
     return matches;
   }
 
+  function normalizeMatchText(value) {
+    return String(value || "").replace(/[\u200b\u00a0]/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  function boundaryOffset(container, offset, map, isEnd = false) {
+    if (container?.nodeType === Node.TEXT_NODE) {
+      const entry = map.nodes.find((candidate) => candidate.node === container);
+      return entry ? entry.start + Math.min(container.nodeValue.length, Math.max(0, offset)) : null;
+    }
+    const children = [...(container?.childNodes || [])];
+    const adjacent = children[isEnd ? offset - 1 : offset] || null;
+    if (adjacent) {
+      const entries = map.nodes.filter((candidate) => candidate.node === adjacent || adjacent.contains?.(candidate.node));
+      if (entries.length) return isEnd ? entries[entries.length - 1].end : entries[0].start;
+    }
+    const descendants = map.nodes.filter((candidate) => container?.contains?.(candidate.node));
+    if (!descendants.length) return null;
+    return isEnd ? descendants[descendants.length - 1].end : descendants[0].start;
+  }
+
   function locate(item, fullText) {
-    if (Number.isInteger(item.start) && fullText.slice(item.start, item.end) === item.quote) {
+    if (Number.isInteger(item.start) && normalizeMatchText(fullText.slice(item.start, item.end)) === normalizeMatchText(item.quote)) {
       return { start: item.start, end: item.end };
     }
     const positions = quotePositions(item.quote, fullText);
@@ -996,7 +1016,8 @@
       if (!entry) return hideToolbar();
       start = (child ? entry.start : entry.end) + leading;
     }
-    const end = start + quote.length;
+    const endBoundary = boundaryOffset(range.endContainer, range.endOffset, map, true);
+    const end = Number.isInteger(endBoundary) ? Math.max(start, endBoundary) : start + quote.length;
     pendingSelection = {
       id: makeId(),
       kind: "selection",

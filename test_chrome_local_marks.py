@@ -18,7 +18,7 @@ class ExtensionTests(unittest.TestCase):
 
     def test_manifest_v3_and_local_permissions(self):
         self.assertEqual(self.manifest["manifest_version"], 3)
-        self.assertEqual(self.manifest["version"], "0.5.9")
+        self.assertEqual(self.manifest["version"], "0.5.10")
         self.assertIn("storage", self.manifest["permissions"])
         self.assertNotIn("tabs", self.manifest["permissions"])
         self.assertNotIn("identity", self.manifest["permissions"])
