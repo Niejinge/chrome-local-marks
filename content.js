@@ -436,7 +436,7 @@
   }
 
   function normalizeMatchText(value) {
-    return String(value || "").replace(/[\u200b\u00a0]/g, " ").replace(/\s+/g, " ").trim();
+    return String(value || "").replace(/[\u200b\u00a0]/g, " ").replace(/\s+/g, "");
   }
 
   function boundaryOffset(container, offset, map, isEnd = false) {

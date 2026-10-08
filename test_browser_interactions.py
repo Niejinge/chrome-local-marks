@@ -164,6 +164,14 @@ CHECKS = r'''
     check($('#settings').classList.contains('hidden') && !$('#mark-submenu').classList.contains('hidden'),'new type choices replace style settings');
     $('#add-bookmark').dispatchEvent(new FocusEvent('focus'));
     check($('#settings').classList.contains('hidden') && $('#mark-submenu').classList.contains('hidden'),'new bookmark focus closes all secondary menus');
+    const multiNode=document.createElement('div'); multiNode.innerHTML='<p>跨块文本第一行</p><p>跨块文本第二行</p>'; document.body.appendChild(multiNode);
+    const multiRange=document.createRange(); multiRange.selectNodeContents(multiNode); selection.removeAllRanges(); selection.addRange(multiRange);
+    multiNode.dispatchEvent(new MouseEvent('mouseup',{bubbles:true})); await pause(); $('#add-mark').click(); await pause();
+    const multiRecord=saved().find(item=>item.quote?.includes('跨块文本第一行'));
+    check(Boolean(multiRecord) && document.querySelector(`mark[data-local-reader-mark="${multiRecord.id}"]`), 'multi-block selection saves and renders a highlight');
+    multiNode.remove();
+    const resetRange=document.createRange(); resetRange.selectNodeContents(textNode); selection.removeAllRanges(); selection.addRange(resetRange);
+    textNode.dispatchEvent(new MouseEvent('mouseup',{bubbles:true})); await pause();
     $('#add-note').click(); await pause();
     check(!$('#note-composer').classList.contains('hidden'), 'new note uses inline composer');
     $('#note-composer-text').value='仅笔记气泡';
