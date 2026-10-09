@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "本地网页标记",
-  "version": "0.5.11",
+  "version": "0.5.12",
   "description": "在网页上添加书签、重点标注、下划线和笔记，全部保存在本机浏览器中。",
   "icons": {
     "16": "icons/icon16.png",

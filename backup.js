@@ -58,6 +58,7 @@ const LocalMarksBackup = (() => {
       suffix: string(source.suffix, 200),
       start,
       end,
+      ...(Number.isFinite(source.viewportRatio) ? { viewportRatio: number(source.viewportRatio, .1, .8, .35) } : {}),
       isBookmark: source.isBookmark === true,
       bookmarkColor: color(source.bookmarkColor),
       bookmarkThickness: number(source.bookmarkThickness, 0, 10, 0),

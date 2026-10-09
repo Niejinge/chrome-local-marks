@@ -131,6 +131,14 @@ CHECKS = r'''
     check(!$('.note-composer').classList.contains('hidden'), 'quick note opens inline composer');
     $('#note-composer-text').value='更新后的快捷笔记'; $('#note-composer-text').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true})); await pause();
     check(local().note==='更新后的快捷笔记', 'quick note saves with Enter');
+    mark = document.querySelector('mark[data-local-reader-mark="local"]'); mark.click();
+    $('#quick-edit').dispatchEvent(new MouseEvent('mouseenter')); $('[data-quick-mode="bookmark"]').click(); await pause();
+    mark = document.querySelector('mark[data-local-reader-mark="local"]'); mark.click();
+    $('#quick').dispatchEvent(new MouseEvent('mouseleave')); $('#quick-note').click();
+    document.dispatchEvent(new Event('scroll')); await wait(300);
+    check($('#quick').classList.contains('open') && !$('.note-composer').classList.contains('hidden'), 'bookmark note composer survives hide timer and focus scroll');
+    $('#note-composer-text').value='书签笔记'; $('#note-composer-text').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true})); await pause();
+    check(local().isBookmark && local().note==='书签笔记', 'bookmark note saves while retaining bookmark');
     $('#launcher').click(); await pause();
     check(testStore.messages.at(-1)?.type==='LOCAL_MARKS_SIDE_PANEL', 'edge entry opens native panel');
     const launcherTop = $('#launcher').getBoundingClientRect().top;
@@ -184,7 +192,8 @@ CHECKS = r'''
     check($('#note-tooltip').classList.contains('visible'), 'pure note hover opens its bubble after delay');
     await wait(450);
     check($('#note-tooltip').classList.contains('visible') && !$('#quick').classList.contains('open'), 'pure note hover never opens edit menu');
-    check(getComputedStyle($('#note-tooltip')).backgroundColor.includes('0.78') || getComputedStyle($('#note-tooltip')).backdropFilter.includes('blur'), 'note bubble uses translucent treatment');
+    $('#note-tooltip').getAnimations().forEach(animation=>animation.finish());
+    check(getComputedStyle($('#note-tooltip')).opacity==='1' && ['rgb(255, 253, 245)','rgb(43, 44, 40)'].includes(getComputedStyle($('#note-tooltip')).backgroundColor), 'note bubble uses opaque background and text');
     $('#all-options').dispatchEvent(new MouseEvent('mouseenter')); await wait(160);
     getComputedStyle($('#all-options')).backgroundColor;
     $('#all-options').getAnimations().forEach(animation=>animation.finish());
@@ -193,6 +202,18 @@ CHECKS = r'''
     $('#all-options').dispatchEvent(new MouseEvent('mouseenter'));
     $('#toolbar').dispatchEvent(new MouseEvent('mouseleave')); await wait(300);
     check($('#settings').classList.contains('hidden') && $('#all-options').getAttribute('aria-expanded')==='false','leaving new toolbar closes settings and resets trigger');
+    const scroller=document.createElement('div'); scroller.style.cssText='position:fixed;top:0;left:0;width:300px;height:100vh;overflow-y:auto;overflow-anchor:none';
+    scroller.innerHTML='<div style="height:900px"></div><p>定位高度回归文本</p><div style="height:1500px"></div>'; document.body.appendChild(scroller);
+    await chrome.storage.local.set({readerMarksV1:[...saved(),{id:'jump-height',kind:'selection',url:location.href,quote:'定位高度回归文本',viewportRatio:.25,highlightColor:'#ef6a5b',highlightThickness:30}]}); await pause();
+    testStore.runtimeListeners.forEach(fn=>fn({type:'LOCAL_MARKS_JUMP',id:'jump-height'},{},()=>{}));
+    const jumpTop=()=>document.querySelector('mark[data-local-reader-mark="jump-height"]').getBoundingClientRect().top;
+    check(Math.abs(jumpTop()-innerHeight*.25)<2, 'jump restores saved height inside nested page scroller');
+    scroller.firstElementChild.style.height='1200px'; window.dispatchEvent(new Event('resize')); await wait(220);
+    check(Math.abs(jumpTop()-innerHeight*.25)<2, 'page reflow after sidebar resize keeps current mark aligned');
+    scroller.firstElementChild.style.height='800px'; testStore.runtimeListeners.forEach(fn=>fn({type:'LOCAL_MARKS_PANEL_VISIBILITY',open:false},{},()=>{})); await wait(220);
+    check(Math.abs(jumpTop()-innerHeight*.25)<2, 'closing sidebar keeps latest mark at saved height');
+    scroller.dispatchEvent(new WheelEvent('wheel',{bubbles:true})); scroller.scrollTop=0; window.dispatchEvent(new Event('resize')); await wait(220);
+    check(scroller.scrollTop===0, 'manual scrolling releases jump alignment');
     finish(); return;
   }
   if (TEST_CASE.startsWith('popup')) {

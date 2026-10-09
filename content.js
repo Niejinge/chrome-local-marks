@@ -104,11 +104,13 @@
       .quick-settings .thickness-controls{grid-template-columns:minmax(0,1fr) 40px}.quick-settings .presets{grid-column:1/-1}.quick-settings .setting-row{grid-template-columns:40px minmax(0,1fr)}
       .quick-settings::before{content:"";position:absolute;inset:-7px 0;z-index:-1}
       .note-tooltip{display:block;width:300px;max-width:calc(100vw - 24px);padding:14px 16px;opacity:0;visibility:hidden;translate:0 4px;transition:opacity 140ms ease,translate 140ms ease,visibility 140ms;pointer-events:none;white-space:normal;color:#33434a;background:rgba(255,253,245,.70);backdrop-filter:blur(10px);border:1px solid #dcd6bf;border-left:3px solid #c7ac60;box-shadow:0 8px 28px #16202d24}
-      .note-tooltip.visible{opacity:.70;visibility:visible;translate:0 0;pointer-events:auto;max-height:min(340px,calc(100vh - 24px));overflow:auto}
+      .note-tooltip.visible{opacity:1;visibility:visible;translate:0 0;pointer-events:auto;max-height:min(340px,calc(100vh - 24px));overflow:auto}
       .note-card-heading{display:block;color:#8a723a;font-size:11px;letter-spacing:.06em;margin-bottom:8px}.note-card-text{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.75;max-height:10.5em;overflow:auto;font-size:13px}.note-tooltip button{display:block;margin-top:10px;padding:0;color:#087f80;border:0;background:transparent;cursor:pointer;font:inherit;font-size:11px}
       @media(prefers-color-scheme:light){.quick-settings{background:#fff;color:#26313a;border-color:#a8b9c1}}
       @media(prefers-color-scheme:dark){.note-tooltip{background:rgba(43,44,40,.70);color:#e3e4d9;border-color:#65634e;border-left-color:#c7ac60}.note-card-heading{color:#d6c286}.note-tooltip button{color:#91d4cd}}
       @media(prefers-reduced-motion:reduce){.note-tooltip{transition:none;translate:none}}
+      .note-tooltip{background:#fffdf5;backdrop-filter:none}
+      @media(prefers-color-scheme:dark){.note-tooltip{background:#2b2c28}}
       /* Single top-level state: hover/focus feedback survives theme overrides. */
       .toolbar{overflow:visible}
       .toolbar>.mark-submenu,.toolbar>.settings{position:absolute;box-sizing:border-box;margin:0;width:360px;max-width:calc(100vw - 20px);overflow:auto;overscroll-behavior:contain;border-radius:10px;box-shadow:0 8px 26px #0003;padding:10px;background:#17212d;color:#f7fafb;border:1px solid #526170}
@@ -1044,6 +1046,7 @@
       updatedAt: now()
     };
     const rect = range.getBoundingClientRect();
+    pendingSelection.viewportRatio = Math.max(.1, Math.min(.8, rect.top / innerHeight));
     pendingRect = { top: rect.top, bottom: rect.bottom, left: rect.left, width: rect.width };
     toolbar.classList.add("visible");
     positionToolbar(false);
@@ -1086,6 +1089,8 @@
   }
 
   function showNoteComposer(item, container) {
+    cancelHover();
+    cancelQuickHide();
     noteComposerTarget = item;
     noteComposerContainer = container;
     noteComposerText.value = item?.note || "";
@@ -1191,12 +1196,38 @@
       showToast("网页内容已变化，暂时无法定位原文");
       return false;
     }
-    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    const ratio = records.find(item => item.id === id)?.viewportRatio;
+    jumpAnchor = { id, ratio: Number.isFinite(ratio) ? Math.max(.1, Math.min(.8, ratio)) : .35 };
+    alignJumpAnchor();
     const old = target.style.getPropertyValue("outline");
     target.style.setProperty("outline", "3px solid #087f80", "important");
     setTimeout(() => target.style.setProperty("outline", old || "none", "important"), 1500);
     return true;
   }
+
+  let jumpAnchor = null;
+  let jumpResizeTimer;
+  function alignJumpAnchor() {
+    if (!jumpAnchor) return;
+    const target = document.querySelector(`mark[data-local-reader-mark="${escapeSelector(jumpAnchor.id)}"]`);
+    if (!target) return;
+    const desired = Math.max(64, Math.min(innerHeight - 80, innerHeight * jumpAnchor.ratio));
+    // Scroll the nearest scrollable ancestors too (chat pages often do not scroll the window).
+    for (let parent = target.parentElement; parent; parent = parent.parentElement) {
+      const style = getComputedStyle(parent);
+      if (!/(auto|scroll)/.test(style.overflowY) || parent.scrollHeight <= parent.clientHeight) continue;
+      parent.scrollBy({ top: target.getBoundingClientRect().top - desired, behavior: "instant" });
+    }
+    window.scrollBy({ top: target.getBoundingClientRect().top - desired, behavior: "instant" });
+  }
+  function scheduleJumpAlignment() {
+    clearTimeout(jumpResizeTimer);
+    jumpResizeTimer = setTimeout(alignJumpAnchor, 180);
+  }
+  window.addEventListener("resize", scheduleJumpAlignment);
+  for (const type of ["wheel", "touchstart"]) document.addEventListener(type, event => {
+    if (!event.composedPath().includes(host)) jumpAnchor = null;
+  }, { passive: true });
 
   function hideNoteTooltip() {
     noteId = null;
@@ -1307,7 +1338,7 @@
     cancelQuickHide();
     quickHideTimer = setTimeout(() => {
       cancelHover();
-      if (noteId) return;
+      if (noteId || noteComposerTarget) return;
       setQuickMenu(null);
       quick.classList.remove("open");
       quickModeMenu.classList.add("hidden");
@@ -1320,6 +1351,7 @@
   }
 
   function showQuick(mark, previewNote = false) {
+    if (noteComposerTarget) return;
     if (isNoteOnlyMark(mark)) {
       showNoteTooltip(mark);
       return;
@@ -1445,7 +1477,13 @@
   });
   root.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
-    if (editOverlay.classList.contains("open")) closeEdit();
+    if (noteComposerTarget) {
+      noteComposerTarget = null;
+      noteComposerContainer = null;
+      noteComposer.classList.add("hidden");
+      quick.classList.remove("open");
+    }
+    else if (editOverlay.classList.contains("open")) closeEdit();
     else if (overlay.classList.contains("open")) closeNote(true);
     else if (!markSubmenu.classList.contains("hidden")) hideMarkSubmenu();
     else if (!quickModeMenu.classList.contains("hidden") || !quickSettings.classList.contains("hidden")) setQuickMenu(null);
@@ -1573,7 +1611,7 @@
   });
   noteComposerText.addEventListener("blur", () => {
     // Clicking another toolbar control commits the current note before that control acts.
-    setTimeout(() => commitNoteComposer(), 0);
+    setTimeout(() => { if (!noteComposer.contains(root.activeElement)) commitNoteComposer(); }, 0);
   });
   search.addEventListener("input", renderList);
   filters.addEventListener("click", (event) => {
@@ -1670,6 +1708,7 @@
 
   document.addEventListener("scroll", event => {
     if (event.composedPath().includes(host)) return;
+    if (noteComposerTarget) return;
     cancelHover(); quick.classList.remove("open"); hideNoteTooltip();
     clearTimeout(scrollHoverTimer);
     scrollHoverTimer = setTimeout(() => {
@@ -1716,7 +1755,7 @@
   });
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message?.type === "LOCAL_MARKS_PANEL_VISIBILITY") { nativePanelOpen = Boolean(message.open); applyLauncherPreference(); sendResponse({ok:true}); return false; }
+    if (message?.type === "LOCAL_MARKS_PANEL_VISIBILITY") { nativePanelOpen = Boolean(message.open); applyLauncherPreference(); scheduleJumpAlignment(); sendResponse({ok:true}); return false; }
     if (message?.type === "LOCAL_MARKS_PREVIEW") {
       const item = records.find(record => record.id === message.id);
       if (item) previewMark(message.record || item);
