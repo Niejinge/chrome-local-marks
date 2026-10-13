@@ -1,4 +1,4 @@
-"""Build the Chrome Web Store ZIP from runtime files only."""
+"""Build the extension ZIP from runtime files and its license."""
 
 import json
 import pathlib
@@ -8,10 +8,14 @@ import zipfile
 
 ROOT = pathlib.Path(__file__).resolve().parent
 RELEASE_FILES = (
+    "LICENSE",
     "manifest.json",
     "content.js",
     "record-groups.js",
     "mark-styles.js",
+    "ui.js",
+    "record-store.js",
+    "store-client.js",
     "background.js",
     "popup.js",
     "sidepanel.js",
@@ -26,6 +30,11 @@ RELEASE_FILES = (
 
 
 def main():
+    # A checkout may already be loaded in Chrome; Python's cache name is
+    # reserved by Chrome even though these files are excluded from releases.
+    cache_dir = ROOT / "__pycache__"
+    if cache_dir.is_dir() and not cache_dir.is_symlink():
+        shutil.rmtree(cache_dir)
     manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
     output_dir = ROOT / "dist"
     output_dir.mkdir(exist_ok=True)

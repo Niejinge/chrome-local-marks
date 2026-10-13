@@ -8,7 +8,7 @@ const LocalMarksStyles = (() => {
     "underline-wavy": { color: "#ef6a5b", thickness: 3, opacity: 100 }
   };
   const meta = {
-    bookmark: { label: "书签边标", min: 1, max: 10, presets: [[2, "细"], [4, "中"], [7, "粗"]] },
+    bookmark: { label: "书签", min: 1, max: 10, presets: [[2, "细"], [4, "中"], [7, "粗"]] },
     highlight: { label: "高亮", min: 3, max: 30, presets: [[7, "细"], [15, "中"], [30, "粗"]] },
     "underline-solid": { label: "直线", min: 1, max: 8, presets: [[1, "细"], [3, "中"], [6, "粗"]] },
     "underline-wavy": { label: "波浪线", min: 1, max: 8, presets: [[1, "细"], [3, "中"], [6, "粗"]] }
@@ -41,7 +41,9 @@ const LocalMarksStyles = (() => {
     }
     return result;
   }
-  return { defaults, meta, normalize, migrate };
+  const annotationModes = ["highlight", "underline-solid", "underline-wavy"];
+  const annotationMode = value => annotationModes.includes(value) ? value : "highlight";
+  return { defaults, meta, normalize, migrate, annotationModes, annotationMode };
 })();
 
 if (typeof module !== "undefined" && module.exports) module.exports = LocalMarksStyles;

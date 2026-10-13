@@ -14,9 +14,26 @@ const backupStatus = document.getElementById("backup-status");
 let records = [];
 let activeTab = null;
 let activeFilter = "all";
+let recordSelectedId = null;
 let currentPageOnly = !new URLSearchParams(location.search).has("library");
 const grouping = document.getElementById("grouping");
 const collapsedGroups = new Set();
+const knownGroups = new Set();
+const searchCollapsedGroups = new Set();
+let expansionQuery = "";
+const groupActions = document.getElementById("group-actions");
+
+function setGroupsOpen(open) {
+  const state = search.value.trim() ? searchCollapsedGroups : collapsedGroups;
+  recordsList.querySelectorAll(".record-group details").forEach(details => {
+    const key = details.dataset.groupKey;
+    if (open) state.delete(key);
+    else state.add(key);
+    details.open = open;
+  });
+}
+document.getElementById("expand-all").addEventListener("click", () => setGroupsOpen(true));
+document.getElementById("collapse-all").addEventListener("click", () => setGroupsOpen(false));
 const clearConfirmation = document.getElementById("clear-confirmation");
 let clearSnapshot = [];
 
@@ -42,6 +59,8 @@ document.getElementById("export-data").addEventListener("click", async () => {
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 30000);
+    await chrome.storage.local.set({readerMarksLastBackupV1:Date.now()});
+    updateCapacity();
     setBackupStatus("备份已下载。文件含私人笔记，请勿公开分享。");
   } catch (error) {
     setBackupStatus(`导出失败：${error.message}`, true);
@@ -56,14 +75,10 @@ importFile.addEventListener("change", async () => {
   if (file.size > 12 * 1024 * 1024) return setBackupStatus("文件超过 12 MB，无法安全导入。", true);
   try {
     const backup = LocalMarksBackup.parse(await file.text());
-    const current = await chrome.storage.local.get([STORAGE_KEY, STYLE_KEY]);
-    const result = LocalMarksBackup.merge(current[STORAGE_KEY], backup.records);
-    const next = { [STORAGE_KEY]: result.records };
-    if (importStyles.checked && backup.styles) next[STYLE_KEY] = backup.styles;
-    await chrome.storage.local.set(next);
+    const result=await LocalMarksData.mutate({op:'import',records:backup.records,styles:importStyles.checked?backup.styles:null});
     records = result.records;
     render();
-    setBackupStatus(`导入完成：新增 ${result.added} 条，跳过重复 ${result.skipped} 条${next[STYLE_KEY] ? "，样式已恢复" : ""}。`);
+    setBackupStatus(`导入完成：新增 ${result.added} 条，跳过重复 ${result.skipped} 条${result.styles ? "，样式已恢复" : ""}。`);
   } catch (error) {
     setBackupStatus(`导入失败：${error.message}`, true);
   }
@@ -125,23 +140,39 @@ function renderPageButton() {
   const supported = activeTab && isSupported(activeTab.url);
   const saved = supported && records.find((item) => item.kind === "page" && item.url === normalizedUrl(activeTab.url));
   pageButton.disabled = !supported;
-  pageButton.textContent = supported ? (saved ? "取消收藏当前网页" : "收藏当前网页") : "此页面不支持注入标记";
+  pageButton.textContent = supported ? (saved ? "已收藏 ✓" : "收藏网页") : "此页面不支持注入标记";
   pageButton.classList.toggle("saved", Boolean(saved));
 }
 
 function render() {
   const query = search.value.trim().toLowerCase();
+  if (query !== expansionQuery) {
+    searchCollapsedGroups.clear();
+    expansionQuery = query;
+  }
+  // New page/site groups start collapsed; rerenders preserve individual choices.
+  LocalMarksGroups.groupRecords(records, grouping.value).forEach(group => {
+    if (!knownGroups.has(group.key)) {
+      knownGroups.add(group.key);
+      collapsedGroups.add(group.key);
+    }
+  });
   const filtered = records
     .filter(item => !currentPageOnly || (activeTab && normalizedUrl(item.url) === normalizedUrl(activeTab.url)))
     .filter(filterMatches)
     .filter((item) => !query || `${item.title || ""} ${item.quote || ""} ${item.note || ""} ${item.url || ""}`.toLowerCase().includes(query))
-    .sort((a, b) => currentPageOnly ? (a.start ?? Infinity) - (b.start ?? Infinity) : new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
+    .sort(LocalMarksGroups.compareCreated);
   grouping.closest("label").hidden = currentPageOnly;
+  groupActions.hidden = currentPageOnly || grouping.value === "none";
+  groupActions.querySelectorAll("button").forEach(button => button.disabled = !filtered.length);
   document.getElementById("scope-current").classList.toggle("active", currentPageOnly);
   document.getElementById("scope-all").classList.toggle("active", !currentPageOnly);
   const groupCount = LocalMarksGroups.groupRecords(filtered, grouping.value).length;
-  summary.textContent = currentPageOnly ? `本页 ${filtered.length} 条记录 · 按正文顺序` : `${records.length} 条本地记录 · 显示 ${filtered.length} 条${grouping.value === "none" ? "" : ` · ${groupCount} 组`}`;
+  summary.textContent = currentPageOnly ? `本页 ${filtered.length} 条记录 · 最新创建在前` : `${records.length} 条本地记录 · 显示 ${filtered.length} 条${grouping.value === "none" ? "" : ` · ${groupCount} 组`}`;
   document.getElementById("clear-all").disabled = records.length === 0;
+  const pageTitle = document.getElementById('current-page-title');
+  pageTitle.textContent = currentPageOnly ? activeTab?.title || hostname(activeTab?.url) : '全部网页';
+  pageTitle.title = pageTitle.textContent;
   recordsList.replaceChildren();
   if (!filtered.length) {
     const empty = document.createElement("li");
@@ -152,70 +183,50 @@ function render() {
     return;
   }
   const createItem = (item) => {
-    const li = document.createElement("li");
-    li.className = "record";
-    const open = document.createElement("button");
-    open.className = "open";
-    open.type = "button";
-    const site = document.createElement("span");
-    site.className = "site";
-    const siteName = document.createElement("span");
-    siteName.textContent = grouping.value === "site" ? item.title || item.url : hostname(item.url);
-    site.appendChild(siteName);
-    const badges = document.createElement("span");
-    badges.className = "badges";
-    labels(item).forEach((label) => {
-      const badge = document.createElement("span");
-      badge.className = "badge";
-      badge.textContent = label;
-      badges.appendChild(badge);
+    const li = document.createElement('li'); li.className = 'record'; li.dataset.recordId = item.id; li.classList.toggle('selected',recordSelectedId===item.id);
+    const open = document.createElement('button'); open.className='open record-detail'; open.type='button'; open.title='查看详情并定位原文';
+    const mode = LocalMarksUI.mode(item), icon = document.createElement('span'); icon.className='lm-type-icon '+mode;icon.innerHTML=LocalMarksUI.icon(mode);icon.style.setProperty('--type-color',mode==='bookmark'?item.bookmarkColor||'#ef6a5b':mode==='highlight'?item.highlightColor:mode.startsWith('underline')?item.underlineColor:'#087f80');
+    const content=document.createElement('span');content.className='record-content';
+    if(!currentPageOnly && grouping.value!=='page') {const site=document.createElement('span');site.className='site';site.textContent=item.title||hostname(item.url);content.append(site);}
+    const quote=document.createElement('span');quote.className='quote';quote.textContent=item.kind==='page'?item.title||item.url:item.quote;content.append(quote);
+    if(item.note){const note=document.createElement('span');note.className='note';note.textContent=item.note;content.append(note);}
+    const meta=document.createElement('span');meta.className='record-meta';const badge=document.createElement('span');badge.className='badge';badge.textContent=item.highlightColor||item.underlineColor?'标注':LocalMarksUI.labels[mode];const date=document.createElement('span');date.className='date';date.textContent=formatDate(item.createdAt||item.updatedAt);meta.append(badge,date);content.append(meta);open.append(icon,content);
+    open.setAttribute('aria-label','查看详情并定位原文：'+(item.quote||item.title||'网页收藏'));
+    open.title='查看详情并定位原文';
+    open.addEventListener('click',()=>{
+      recordSelectedId=item.id;recordsList.querySelectorAll('.record').forEach(row=>row.classList.toggle('selected',row.dataset.recordId===item.id));
+      window.dispatchEvent(new CustomEvent('marks-select',{detail:{item,tabId:normalizedUrl(item.url)===normalizedUrl(activeTab?.url)?activeTab?.id:null,locate:true}}));
     });
-    const quote = document.createElement("span");
-    quote.className = "quote";
-    quote.textContent = item.kind === "page" ? item.title || item.url : item.quote;
-    open.append(site, badges, quote);
-    if (item.note) {
-      const note = document.createElement("span");
-      note.className = "note";
-      note.textContent = item.note;
-      open.appendChild(note);
-    }
-    const date = document.createElement("span");
-    date.className = "date";
-    date.textContent = formatDate(item.updatedAt || item.createdAt);
-    open.appendChild(date);
-    open.addEventListener("click", async () => {
-      const result = await chrome.runtime.sendMessage({ type: "LOCAL_MARKS_OPEN_RECORD", record: item });
-      if (item.kind === "selection") window.dispatchEvent(new CustomEvent("marks-select", { detail: {item, tabId:result?.tabId} }));
+    const actions=document.createElement('div');actions.className='record-actions';
+    const locate=document.createElement('button');locate.className='record-locate';locate.type='button';locate.textContent='定位';locate.setAttribute('aria-label','定位原文');locate.title='定位原文';
+    locate.addEventListener('click',async()=>{
+      try{const result=await chrome.runtime.sendMessage({type:'LOCAL_MARKS_OPEN_RECORD',record:item});if(result?.ok===false||result?.jumped===false&&item.kind==='selection')listError('无法定位原文，请刷新网页后重试');}catch(_){listError('无法定位原文，请刷新网页后重试');}
     });
-    const remove = document.createElement("button");
-    remove.className = "delete";
-    remove.type = "button";
-    remove.textContent = "删除";
-    remove.addEventListener("click", async () => {
-      const latest = await chrome.storage.local.get(STORAGE_KEY);
-      records = (latest[STORAGE_KEY] || []).filter((record) => record.id !== item.id);
-      await chrome.storage.local.set({ [STORAGE_KEY]: records });
-      render();
+    const remove=document.createElement('button');remove.className='delete icon-button';remove.type='button';remove.innerHTML=LocalMarksUI.icon('trash');remove.setAttribute('aria-label','删除此标记');remove.title='删除此标记';
+    remove.addEventListener('click',async()=>{
+      try{const result=await LocalMarksData.mutate({op:'delete',ids:[item.id],undo:true});records=result.records;render();showUndo(result);}catch(_){listError('删除失败，请重试');}
     });
-    li.append(open, remove);
-    return li;
+    actions.append(locate,remove);li.append(open,actions);return li;
   };
-  LocalMarksGroups.render(recordsList, filtered, currentPageOnly ? "none" : grouping.value, createItem, collapsedGroups, Boolean(query));
+  if(currentPageOnly) filtered.forEach(item=>recordsList.append(createItem(item)));
+  else LocalMarksGroups.render(recordsList, filtered, grouping.value, createItem, query ? searchCollapsedGroups : collapsedGroups);
   renderPageButton();
 }
+
+function listError(message){const el=document.getElementById('list-status');el.textContent=message;el.hidden=false;}
+document.querySelector('.logo').innerHTML=LocalMarksUI.icon('bookmark');
+document.getElementById('settings-toggle').innerHTML=LocalMarksUI.icon('settings');
+function showSettings(open){document.getElementById('settings-view').hidden=!open;document.getElementById('settings-toggle').setAttribute('aria-expanded',String(open));if(open)document.getElementById('backup-panel').open=true;}
+document.getElementById('settings-toggle').addEventListener('click',()=>showSettings(document.getElementById('settings-view').hidden));
+document.getElementById('settings-close').addEventListener('click',()=>showSettings(false));
 
 pageButton.addEventListener("click", async () => {
   if (!activeTab || !isSupported(activeTab.url)) return;
   const url = normalizedUrl(activeTab.url);
-  const saved = records.find((item) => item.kind === "page" && item.url === url);
-  if (saved) records = records.filter((item) => item.id !== saved.id);
-  else {
-    const timestamp = new Date().toISOString();
-    records.push({ id: makeId(), kind: "page", url, title: activeTab.title || url, createdAt: timestamp, updatedAt: timestamp });
-  }
-  await chrome.storage.local.set({ [STORAGE_KEY]: records });
-  render();
+  const timestamp=new Date().toISOString();
+  try{const result=await LocalMarksData.mutate({op:'page-toggle',record:{id:makeId(),kind:'page',url,title:activeTab.title||url,createdAt:timestamp,updatedAt:timestamp}});records=result.records;render();if(result.undoToken)showUndo(result);}
+  catch(error){listError(error.message);}
+
 });
 
 search.addEventListener("input", render);
@@ -245,11 +256,8 @@ document.getElementById("clear-confirm").addEventListener("click", async () => {
   const button = document.getElementById("clear-confirm");
   button.disabled = true;
   try {
-    const current = await chrome.storage.local.get(STORAGE_KEY);
-    const ids = new Set(clearSnapshot);
-    const remaining = (current[STORAGE_KEY] || []).filter((item) => !ids.has(item.id));
-    await chrome.storage.local.set({ [STORAGE_KEY]: remaining });
-    records = remaining;
+    const result=await LocalMarksData.mutate({op:'delete',ids:clearSnapshot});
+    const remaining=result.records;records=remaining;
     clearSnapshot = [];
     clearConfirmation.hidden = true;
     render();
@@ -302,3 +310,19 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 init();
+
+function showUndo(result){LocalMarksUI.offerUndo(document.getElementById('undo-status'),result,()=>{},error=>listError(error.message));}
+let capacityGeneration=0,capacityTimer=0;
+async function updateCapacity(){
+  const token=++capacityGeneration;
+  try{const usage=await LocalMarksData.usage();const data=await chrome.storage.local.get('readerMarksLastBackupV1');if(token!==capacityGeneration)return;
+    const last=data.readerMarksLastBackupV1;
+    document.getElementById('storage-usage').textContent=`已用 ${(usage.bytes/1048576).toFixed(2)} / ${(usage.limit/1048576).toFixed(0)} MB · ${last?'上次导出 '+new Date(last).toLocaleDateString('zh-CN'):'尚未导出备份'}`;
+    document.getElementById('capacity-warning').hidden=usage.ratio<.8;
+  }catch(_){document.getElementById('storage-usage').textContent='暂时无法读取存储用量，请重试';}
+}
+document.getElementById('capacity-settings').addEventListener('click',()=>showSettings(true));
+document.getElementById('help-dismiss').addEventListener('click',async()=>{try{await chrome.storage.local.set({readerMarksHelpDismissedV1:true});document.getElementById('getting-started').hidden=true;}catch(error){listError('未能保存提示设置，请重试');}});
+chrome.storage.local.get('readerMarksHelpDismissedV1').then(data=>{document.getElementById('getting-started').hidden=Boolean(data.readerMarksHelpDismissedV1)});
+chrome.storage.onChanged.addListener((_changes,area)=>{if(area==='local'){clearTimeout(capacityTimer);capacityTimer=setTimeout(updateCapacity,100)}});
+updateCapacity();

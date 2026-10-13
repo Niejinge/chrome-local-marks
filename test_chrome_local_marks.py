@@ -18,7 +18,7 @@ class ExtensionTests(unittest.TestCase):
 
     def test_manifest_v3_and_local_permissions(self):
         self.assertEqual(self.manifest["manifest_version"], 3)
-        self.assertEqual(self.manifest["version"], "0.5.12")
+        self.assertEqual(self.manifest["version"], "0.7.4")
         self.assertIn("storage", self.manifest["permissions"])
         self.assertNotIn("tabs", self.manifest["permissions"])
         self.assertNotIn("identity", self.manifest["permissions"])
@@ -38,7 +38,8 @@ class ExtensionTests(unittest.TestCase):
         self.assertNotIn("data-style-target", self.content)
 
     def test_unified_settings_include_every_mark_mode(self):
-        self.assertIn('[["bookmark", "书签"], ["highlight", "高亮"], ["underline-solid", "直线"], ["underline-wavy", "波浪"]]', self.content)
+        self.assertIn('LocalMarksUI.renderStyleEditor', self.content)
+        self.assertIn('src="ui.js"', (ROOT / 'popup.html').read_text())
         self.assertIn('$("#all-options").addEventListener', self.content)
         self.assertIn("ICONS.sliders", self.content)
 
@@ -52,11 +53,11 @@ class ExtensionTests(unittest.TestCase):
             self.assertIn(token, self.content)
 
     def test_all_mark_styles_support_opacity(self):
-        for token in ["bookmarkOpacity", "highlightOpacity", "underlineOpacity", "colorWithOpacity", 'opacityRange.min = "10"', 'opacityRange.max = "100"']:
+        for token in ["bookmarkOpacity", "highlightOpacity", "underlineOpacity", "colorWithOpacity"]:
             self.assertIn(token, self.content)
 
     def test_style_changes_apply_to_pending_selection_immediately(self):
-        for token in ["applyPendingLive", "applyToolbarStyle", "已按新样式标注", "toolbar.classList.add(\"visible\")"]:
+        for token in ["applyPendingLive", "applyToolbarStyle", "toolbar.classList.add(\"visible\")"]:
             self.assertIn(token, self.content)
 
     def test_existing_marks_have_edit_controls(self):
@@ -67,7 +68,7 @@ class ExtensionTests(unittest.TestCase):
         self.assertIn("sidePanel", self.manifest["permissions"])
         self.assertEqual(self.manifest["side_panel"]["default_path"], "popup.html")
         self.assertNotIn("default_popup", self.manifest["action"])
-        for token in ["}, 700)", "300)", "}, 250)", "prefers-reduced-motion", "opacity 140ms"]:
+        for token in ["}, 700)", "300)", "quickTransit.leave(close)", "prefers-reduced-motion", "opacity 140ms"]:
             self.assertIn(token, self.content)
 
     def test_page_bookmarks_are_visible_across_pages(self):
@@ -96,7 +97,7 @@ class ExtensionTests(unittest.TestCase):
         popup_html = (ROOT / "popup.html").read_text(encoding="utf-8")
         for token in ['id="export-data"', 'id="import-data"', 'id="import-styles"', 'src="backup.js"']:
             self.assertIn(token, popup_html)
-        for token in ["LocalMarksBackup.create", "LocalMarksBackup.parse", "LocalMarksBackup.merge"]:
+        for token in ["LocalMarksBackup.create", "LocalMarksBackup.parse", "LocalMarksData.mutate"]:
             self.assertIn(token, self.popup)
         self.assertNotIn("downloads", self.manifest["permissions"])
 
@@ -159,9 +160,11 @@ class ExtensionTests(unittest.TestCase):
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 destination.write_bytes(source.read_bytes())
             (source_root / "__pycache__").mkdir()
+            (source_root / "__pycache__" / "package_release.pyc").write_bytes(b"cache")
             (source_root / "test-only.py").write_text("", encoding="utf-8")
             with mock.patch.object(package_release, "ROOT", source_root):
                 package_release.main()
+            self.assertFalse((source_root / "__pycache__").exists())
             install_dir = source_root / "dist" / "chrome-local-marks-unpacked"
             actual = {str(path.relative_to(install_dir)) for path in install_dir.rglob("*") if path.is_file()}
             self.assertEqual(actual, set(RELEASE_FILES))

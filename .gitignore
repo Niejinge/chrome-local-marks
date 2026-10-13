@@ -9,3 +9,9 @@ node_modules/
 *.key
 *.log
 dist/
+.local-maintainer/
+CHROMEWEBSTORE.md
+RELEASE-REVIEW-*.md
+RELEASE-VALIDATION-*.md
+native-test-results.json
+store-assets/

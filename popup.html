@@ -1,30 +1,16 @@
 <!doctype html>
 <html lang="zh-CN">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>本地网页标记</title>
-  <link rel="stylesheet" href="popup.css">
-</head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>本地网页标记</title><link rel="stylesheet" href="popup.css"></head>
 <body>
-  <header>
-    <div class="brand"><span class="logo">◇</span><div><h1>本地网页标记</h1><p>数据仅保存在当前浏览器</p></div></div>
-    <button id="page-bookmark" type="button">收藏当前网页</button>
-  </header>
+  <header><div class="brand"><span class="logo" aria-hidden="true"></span><h1>本地网页标记</h1></div><button id="settings-toggle" class="icon-button" aria-label="设置与数据" aria-expanded="false" title="设置与数据"></button></header>
   <button id="collapse-panel" type="button" aria-label="收起侧栏" title="收起侧栏">›</button>
   <main>
-    <nav class="scope-tabs" aria-label="查看范围"><button id="scope-current" class="active">本页标注</button><button id="scope-all">全部标记</button></nav>
-    <section id="detail" hidden aria-label="标注详情">
-      <div class="detail-heading"><h2>标注详情</h2><button id="detail-close" aria-label="关闭详情">×</button></div>
-      <blockquote id="detail-quote"></blockquote>
-      <label>类型<select id="detail-mode"><option value="highlight">高亮</option><option value="underline-solid">直线</option><option value="underline-wavy">波浪线</option><option value="bookmark">书签</option></select></label>
-      <div class="detail-controls"><label>颜色<input id="detail-color" type="color"></label><label>粗细 <output id="detail-thickness-value"></output><input id="detail-thickness" type="range" step="1"></label><label>透明度 <output id="detail-opacity-value"></output><input id="detail-opacity" type="range" min="10" max="100" step="1"></label></div>
-      <label for="detail-note">笔记</label><textarea id="detail-note" maxlength="10000" placeholder="写下理解、疑问或待复习内容……"></textarea>
-      <div class="detail-actions"><button id="detail-save">保存笔记</button><button id="detail-locate">定位原文</button></div><p id="detail-status" role="status" aria-live="polite"></p>
-    </section>
+    <section id="settings-view" hidden><div class="settings-heading"><h2>设置与数据</h2><button id="settings-close" class="icon-button" aria-label="关闭设置">×</button></div>
     <details class="backup" id="backup-panel">
       <summary>详细设置</summary>
       <label class="entry-setting">网页入口<select id="entry-side"><option value="right">右侧</option><option value="left">左侧</option><option value="hidden">隐藏（通过扩展图标打开）</option></select></label>
+      <p id="storage-usage" role="status">正在读取存储用量……</p>
+      <details class="usage-help"><summary>使用帮助</summary><p>选中文字后可添加书签、标注或笔记，编辑后自动保存。点击记录查看详情，使用“定位”回到原文。</p><p>Chrome 设置页、扩展商店及浏览器 PDF 阅读器无法标记；嵌入框架与部分虚拟列表暂不支持。本地 HTML 需在扩展详情中开启“允许访问文件网址”。</p><p>数据仅在当前浏览器中，卸载前请导出备份。</p></details>
       <p>标记只存在本机。导出文件含网址、选中文字和笔记，请妥善保存。</p>
       <div class="backup-actions"><button id="export-data" type="button">导出 JSON</button><button id="import-data" type="button">导入 JSON</button></div>
       <label class="backup-option"><input id="import-styles" type="checkbox"> 同时恢复标记样式（覆盖本机样式）</label>
@@ -38,23 +24,35 @@
         </div>
       </div>
     </details>
-    <input id="search" type="search" placeholder="搜索网页、原文或笔记" aria-label="搜索全部标记">
-    <div class="filters" id="filters">
-      <button class="active" data-filter="all">全部</button>
-      <button data-filter="page">网页</button>
-      <button data-filter="bookmark">书签</button>
-      <button data-filter="mark">标注</button>
-      <button data-filter="note">笔记</button>
-    </div>
-    <label class="grouping-control">分组方式<select id="grouping" aria-label="标记分组方式"><option value="page">按网页</option><option value="site">按网站</option><option value="none">按时间，不分组</option></select></label>
-    <p class="summary" id="summary"></p>
-    <ul id="records"></ul>
+    </section>
+    <section id="list-view">
+      <aside id="getting-started" class="getting-started" hidden><p>选中文字即可添加标记，笔记和样式自动保存。点击记录查看详情，使用“定位”回到原文。</p><p>本地 HTML 需允许文件访问；Chrome 设置页、扩展商店和 PDF 阅读器不支持标记。详细说明见“设置与数据”。</p><button id="help-dismiss" type="button">知道了</button></aside>
+      <p id="capacity-warning" class="capacity-warning" role="status" hidden>存储空间快满了，建议导出备份并清理记录。<button id="capacity-settings" type="button">查看用量与备份</button></p>
+      <nav class="scope-tabs" aria-label="查看范围"><button id="scope-current" class="active">本页</button><button id="scope-all">全部</button></nav>
+      <input id="search" type="search" placeholder="搜索原文或笔记" aria-label="搜索网页、原文或笔记">
+      <div class="filters" id="filters"><button class="active" data-filter="all">全部</button><button data-filter="page">网页</button><button data-filter="bookmark">书签</button><button data-filter="mark">标注</button><button data-filter="note">笔记</button></div>
+      <label class="grouping-control">分组方式<select id="grouping" aria-label="标记分组方式"><option value="page">按网页</option><option value="site">按网站</option><option value="none">按时间，不分组</option></select></label>
+      <div id="group-actions" class="group-actions" hidden aria-label="分组展开控制">
+        <button id="expand-all" type="button" aria-controls="records" title="展开当前列表所有分组">全部展开</button>
+        <button id="collapse-all" type="button" aria-controls="records" title="折叠当前列表所有分组">全部折叠</button>
+      </div>
+      <div class="page-context"><span id="current-page-title"></span><button id="page-bookmark" type="button">收藏网页</button></div>
+      <p class="summary" id="summary"></p><p id="list-status" role="status" hidden></p>
+      <ul id="records"></ul>
+    </section>
+    <section id="detail" hidden aria-label="标记详情">
+      <div class="detail-heading"><button id="detail-close" class="back-button" aria-label="返回列表">‹ 返回列表</button><button id="detail-delete" class="icon-button delete" aria-label="删除此标记" title="删除此标记"></button></div>
+      <h2 id="detail-title"></h2>
+      <h3>原文</h3><blockquote id="detail-quote"></blockquote>
+      <div class="detail-source"><span id="detail-source"></span><button id="detail-locate" type="button">定位原文</button></div>
+      <p id="detail-navigation-status" class="navigation-status" role="status" hidden></p>
+      <label class="note-label" for="detail-note">我的笔记</label><textarea id="detail-note" maxlength="10000" placeholder="写下理解、疑问或待复习内容……"></textarea>
+      <div class="save-feedback"><p id="detail-status" role="status" aria-live="polite"></p><button id="detail-retry" hidden type="button">重试</button></div>
+      <details id="detail-style"><summary><span id="detail-style-summary">样式</span></summary><label class="mode-label">类型<select id="detail-mode"><option value="bookmark">书签</option><option value="highlight">高亮</option><option value="underline-solid">直线</option><option value="underline-wavy">波浪线</option></select></label><div id="detail-style-editor"></div></details>
+      <p id="detail-meta"></p>
+    </section>
   </main>
-  <footer><span>选中网页文字即可标记</span><button id="open-page-panel" type="button">独立管理页</button></footer>
-  <script src="mark-styles.js"></script>
-  <script src="backup.js"></script>
-  <script src="record-groups.js"></script>
-  <script src="popup.js"></script>
-  <script src="sidepanel.js"></script>
-</body>
-</html>
+  <div id="undo-status"></div>
+  <footer><span>仅保存在当前浏览器</span><button id="open-page-panel" type="button">独立管理页 ↗</button></footer>
+  <script src="mark-styles.js"></script><script src="ui.js"></script><script src="backup.js"></script><script src="record-groups.js"></script><script src="store-client.js"></script><script src="popup.js"></script><script src="sidepanel.js"></script>
+</body></html>

@@ -102,7 +102,7 @@
       .quick .quick-mode-menu button.active,.toolbar .mark-submenu button.active,.quick .presets button.selected{background:#087f80;color:#fff;border-color:#6dd4d2}
       .quick-settings{position:absolute;z-index:2;box-sizing:border-box;flex:none;padding:12px;background:#17212d;color:#f0f5f7;border:1px solid #647885;border-radius:10px;box-shadow:0 8px 26px #0003;overscroll-behavior:contain}
       .quick-settings .thickness-controls{grid-template-columns:minmax(0,1fr) 40px}.quick-settings .presets{grid-column:1/-1}.quick-settings .setting-row{grid-template-columns:40px minmax(0,1fr)}
-      .quick-settings::before{content:"";position:absolute;inset:-7px 0;z-index:-1}
+      .quick-settings::before{content:"";position:absolute;inset:-8px;z-index:-1}
       .note-tooltip{display:block;width:300px;max-width:calc(100vw - 24px);padding:14px 16px;opacity:0;visibility:hidden;translate:0 4px;transition:opacity 140ms ease,translate 140ms ease,visibility 140ms;pointer-events:none;white-space:normal;color:#33434a;background:rgba(255,253,245,.70);backdrop-filter:blur(10px);border:1px solid #dcd6bf;border-left:3px solid #c7ac60;box-shadow:0 8px 28px #16202d24}
       .note-tooltip.visible{opacity:1;visibility:visible;translate:0 0;pointer-events:auto;max-height:min(340px,calc(100vh - 24px));overflow:auto}
       .note-card-heading{display:block;color:#8a723a;font-size:11px;letter-spacing:.06em;margin-bottom:8px}.note-card-text{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.75;max-height:10.5em;overflow:auto;font-size:13px}.note-tooltip button{display:block;margin-top:10px;padding:0;color:#087f80;border:0;background:transparent;cursor:pointer;font:inherit;font-size:11px}
@@ -139,7 +139,7 @@
       </div>
       <div class="mark-submenu hidden" id="mark-submenu" role="group" aria-label="选择标注类型"><button type="button" data-mark-mode="highlight">${ICONS.highlighter}<span>高亮</span></button><button type="button" data-mark-mode="underline-solid">${ICONS.line}<span>直线</span></button><button type="button" data-mark-mode="underline-wavy">${ICONS.wave}<span>波浪线</span></button></div>
       <div class="settings style-editor hidden" id="settings"></div>
-      <div class="note-composer hidden" id="note-composer"><textarea id="note-composer-text" maxlength="10000" placeholder="写下笔记……"></textarea><small>Enter 保存 · Shift+Enter 换行 · 点击其他区域也会保存</small></div>
+      <div class="note-composer hidden" id="note-composer"><textarea id="note-composer-text" maxlength="10000" placeholder="写下笔记……"></textarea><div class="note-composer-footer"><small id="note-save-status" role="status">输入后自动保存</small><button id="note-delete" class="note-delete" type="button" aria-label="删除笔记">删除笔记</button></div></div>
     </div>
     <aside class="panel" id="panel" aria-label="当前网页标记">
       <div class="panel-header"><div><h2>我的标记</h2><p>按网页整理标记与收藏</p></div><div class="panel-header-actions"><button class="icon-button" id="open-style-settings" type="button" aria-label="详细设置" title="详细设置">⚙</button><button class="icon-button" id="close-panel" type="button" aria-label="关闭">×</button></div></div>
@@ -156,6 +156,23 @@
     <div class="overlay" id="note-overlay"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="note-title"><div class="dialog-head"><h2 id="note-title">添加笔记</h2><button class="icon-button" id="note-close" type="button" aria-label="关闭">×</button></div><form class="dialog-body" id="note-form"><blockquote class="note-quote" id="note-quote"></blockquote><textarea class="note-text" id="note-text" maxlength="10000" placeholder="写下理解、疑问或待复习内容……"></textarea><div class="dialog-actions"><button class="secondary" id="note-cancel" type="button">取消</button><button class="primary" type="submit">保存</button></div></form></section></div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
   `;
+
+  const visualStyle = document.createElement('style');
+  visualStyle.textContent = LocalMarksUI.css + `
+    :host{--ui-text:#26313a;--ui-muted:#70808c;--ui-border:#e3e9ec;--ui-soft:#f4f7f8;--ui-selected:#e8f5f3;--ui-accent:#087f80;--ui-surface:#fff}
+    .toolbar,.quick,.toolbar>.settings,.toolbar>.mark-submenu,.quick-mode-menu,.quick-settings,.note-composer{color:var(--ui-text);background:var(--ui-surface);border:1px solid var(--ui-border);border-radius:11px;box-shadow:0 5px 20px #182c3918}
+    .toolbar,.quick{padding:5px;gap:2px}.quick{max-width:calc(100vw - 16px)!important;flex-wrap:nowrap!important}
+    .toolbar .actions>button,.quick>button{padding:7px 9px;color:var(--ui-text);background:transparent;border:0;box-shadow:none;white-space:nowrap;font-size:13px;border-radius:7px}
+    .toolbar .actions>button:hover,.toolbar .actions>button:focus-visible,.quick>button:hover,.quick>button:focus-visible{background:var(--ui-soft);color:var(--ui-text);box-shadow:none}
+    .toolbar .actions>button[aria-expanded=true],.quick>button[aria-expanded=true]{background:var(--ui-selected);color:var(--ui-accent);box-shadow:none}
+    .quick>button.danger{margin-left:3px;border-left:1px solid var(--ui-border);border-radius:0 7px 7px 0;color:var(--ui-muted)}.quick>button.danger:hover,.quick>button.danger:focus-visible{color:#b13e3e;background:#fff0ee;box-shadow:none}
+    .quick-mode-menu,.toolbar>.mark-submenu{padding:5px;gap:3px}.quick-mode-menu button,.mark-submenu button{border:0;background:transparent;color:var(--ui-text);font-size:12px;padding:8px;border-radius:7px}.quick-mode-menu button.active,.mark-submenu button.active{color:var(--ui-accent)!important;background:var(--ui-selected)!important}
+    .toolbar>.settings,.quick-settings{width:300px;padding:14px}.note-composer{padding:12px}.note-composer textarea{background:var(--ui-soft);color:var(--ui-text);border:1px solid var(--ui-border);border-radius:7px}.note-composer small{color:var(--ui-muted)}
+    .bookmark-flag{padding:0;border:0;background:transparent;pointer-events:auto;cursor:pointer;border-radius:1px;z-index:0}.bookmark-flag svg{display:block;width:100%;height:100%;fill:currentColor;stroke:none}.bookmark-flag:focus-visible{outline:2px solid var(--ui-accent);outline-offset:3px}
+    @media(prefers-color-scheme:dark){:host{--ui-text:#e5ebef;--ui-muted:#a8b5bf;--ui-border:#3b4851;--ui-soft:#2a333b;--ui-selected:#254641;--ui-accent:#8dd8cf;--ui-surface:#20272e}.quick>button.danger:hover,.quick>button.danger:focus-visible{color:#ffb9b2;background:#492d31}}
+    @media(max-width:560px){.quick>button{padding:7px 6px;font-size:12px}.toolbar>.settings{max-width:calc(100vw - 24px)}}
+  `;
+  root.append(visualStyle);
 
   const $ = (selector) => root.querySelector(selector);
   const launcher = $("#launcher");
@@ -188,6 +205,9 @@
   const quick = $("#quick");
   const quickModeMenu = $("#quick-mode-menu");
   const noteTooltip = $("#note-tooltip");
+  const noteActionsTheme = document.createElement('style');
+  noteActionsTheme.textContent = `.note-card-actions,.note-composer-footer{display:flex;align-items:center;justify-content:space-between;gap:10px}.note-tooltip .note-card-actions button,.note-composer .note-delete{min-height:32px;margin:8px 0 0;padding:5px 7px;border:0;border-radius:6px;background:transparent;font:inherit;font-size:11px;cursor:pointer}.note-composer-footer small{flex:1}.note-tooltip .note-delete,.note-composer .note-delete{color:#b13e3e}.note-delete:hover{background:#fff0f0}.note-delete:disabled{opacity:.5;cursor:default}.note-tooltip button:focus-visible,.note-composer button:focus-visible{outline:2px solid var(--ui-accent,#087f80);outline-offset:2px}@media(prefers-color-scheme:dark){.note-tooltip .note-delete,.note-composer .note-delete{color:#ffb9b2}.note-delete:hover{background:#492d31}}`;
+  root.appendChild(noteActionsTheme);
   const toast = $("#toast");
 
   let records = [];
@@ -195,13 +215,21 @@
   let noteComposerTarget = null;
   let noteComposerContainer = null;
   let noteComposerSaving = false;
+  let deletingNoteId = null;
+  let noteSaveTimer = 0;
+  let noteComposing = false;
+  let noteSaveQueue = Promise.resolve();
+  let recordSaveQueue = Promise.resolve();
+  const knownRecordIds = new Set();
   let pendingRect = null;
   let editingId = null;
   let styleEditingId = null;
   let editMode = "highlight";
   let editConfig = null;
   let quickId = null;
+  const failedStyleEdits = new Map();
   let quickHideTimer = 0;
+  let quickTransit = null, createTransit = null;
   let activeFilter = "all";
   let panelView = "marks";
   let toastTimer = 0;
@@ -242,7 +270,7 @@
     toast.textContent = message;
     toast.classList.add("visible");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => toast.classList.remove("visible"), 1800);
+    toastTimer = setTimeout(() => {if(!toast.querySelector('.undo-action'))toast.classList.remove("visible")}, 1800);
   }
 
   function normalizeStyles(saved) {
@@ -325,42 +353,47 @@
   }
 
   async function load() {
-    const result = await chrome.storage.local.get([STORAGE_KEY, STYLE_KEY, PREVIOUS_STYLE_KEY, LEGACY_STYLE_KEY, GROUPING_KEY]);
+    const result = await chrome.storage.local.get([STORAGE_KEY, STYLE_KEY, PREVIOUS_STYLE_KEY, LEGACY_STYLE_KEY, GROUPING_KEY, "readerMarksAnnotationModeV1"]);
+    toolbarMarkMode = LocalMarksStyles.annotationMode(result.readerMarksAnnotationModeV1);
+    toolbarSettingsMode = toolbarMarkMode;
     records = Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];
+    records.forEach(item => knownRecordIds.add(item.id));
     styles = result[STYLE_KEY]
       ? normalizeStyles(result[STYLE_KEY])
       : LocalMarksStyles.migrate(result[PREVIOUS_STYLE_KEY], result[LEGACY_STYLE_KEY]);
-    if (!result[STYLE_KEY]) await chrome.storage.local.set({ [STYLE_KEY]: styles });
+    if (!result[STYLE_KEY]) {const saved=await LocalMarksData.mutate({op:'styles-init',styleDefaults:styles});if(saved.styles)styles=saved.styles;}
     grouping.value = ["page", "site", "none"].includes(result[GROUPING_KEY]) ? result[GROUPING_KEY] : "page";
     renderStyleEditors();
     refresh();
   }
 
   async function saveStyles(mode, config) {
-    const next = { ...styles, [mode]: normalizeStyles({ [mode]: config })[mode] };
-    await chrome.storage.local.set({ [STYLE_KEY]: next });
-    styles = next;
-    renderStyleEditors();
+    const result=await LocalMarksData.mutate({op:'styles',styleMode:mode,styleConfig:config});
+    if(result.styles)styles=result.styles;
   }
-
-  async function saveRecords(nextRecords) {
-    await chrome.storage.local.set({ [STORAGE_KEY]: nextRecords });
-    records = nextRecords;
-    refresh();
+  function acceptRecords(nextRecords){
+    const before=JSON.stringify(pageRecords());
+    records=nextRecords;
+    if(before!==JSON.stringify(pageRecords()))refresh();else renderList();
   }
-
-  async function saveRecord(record) {
-    await saveRecords([...records.filter((item) => item.id !== record.id), record]);
+  async function saveRecord(record, patch = null, annotationMode = null) {
+    const snapshot=structuredClone(record);
+    const job=recordSaveQueue.catch(()=>{}).then(async()=>{
+      const result=await LocalMarksData.mutate({op:'upsert',record:snapshot,patch:patch||snapshot,allowCreate:!knownRecordIds.has(snapshot.id),annotationMode});
+      knownRecordIds.add(snapshot.id);acceptRecords(result.records);
+    });recordSaveQueue=job;return job;
   }
-
-  async function deleteRecord(id) {
-    await saveRecords(records.filter((item) => item.id !== id));
+  async function deleteRecord(id,undo=false) {
+    const job=recordSaveQueue.catch(()=>{}).then(async()=>{
+      const result=await LocalMarksData.mutate({op:'delete',ids:[id],undo});knownRecordIds.add(id);acceptRecords(result.records);return result;
+    });recordSaveQueue=job;return job;
   }
 
   async function deleteRecordWithFeedback(id, successMessage = "标记已删除") {
     try {
-      await deleteRecord(id);
+      const result=await deleteRecord(id,true);
       showToast(successMessage);
+      LocalMarksUI.offerUndo(toast,result,()=>{},error=>showToast(error.message));
       return true;
     } catch (error) {
       console.error("[本地网页标记] 删除失败", error);
@@ -547,10 +580,9 @@
       mark.style.setProperty("text-decoration-skip-ink", "none", "important");
     }
     if (item.isBookmark && isFirstPiece) {
-      const bookmarkColor = colorWithOpacity(item.bookmarkColor || DEFAULT_STYLES.bookmark.color, item.bookmarkOpacity ?? 100);
-      mark.style.setProperty("border-left", `${item.bookmarkThickness || DEFAULT_STYLES.bookmark.thickness}px solid ${bookmarkColor}`, "important");
-      mark.style.setProperty("padding-left", "0.16em", "important");
-      mark.style.setProperty("border-radius", "2px", "important");
+      mark.dataset.bookmarkFlag = 'true';
+      mark.style.setProperty('--bookmark-color', colorWithOpacity(item.bookmarkColor || DEFAULT_STYLES.bookmark.color, item.bookmarkOpacity ?? 100));
+      mark.style.setProperty('--bookmark-size', String(item.bookmarkThickness || DEFAULT_STYLES.bookmark.thickness));
     }
     if (item.note && !item.highlightColor && !item.underlineColor && !item.isBookmark) {
       // Notes use their own soft bubble treatment and never inherit a mark style.
@@ -573,15 +605,17 @@
     marks.forEach((mark, index) => {
       const appearance = createMark(item, index === 0, index === marks.length - 1);
       mark.style.cssText = appearance.style.cssText;
+      if(appearance.dataset.bookmarkFlag) mark.dataset.bookmarkFlag = 'true'; else delete mark.dataset.bookmarkFlag;
     });
+    renderBookmarkFlags();
   }
 
-  function previewToolbarStyle(mode) {
+  function previewToolbarStyle(mode, config = styles[mode]) {
     if (!pendingSelection) return;
-    const existing = pageRecords().find((item) => item.kind === "selection" && item.start === pendingSelection.start && item.end === pendingSelection.end && item.quote === pendingSelection.quote);
+    const existing = exactSelection(pendingSelection);
     if (overlaps(pendingSelection, existing?.id)) return;
     if (!toolbarPreviewBackup) toolbarPreviewBackup = { id: (existing || pendingSelection).id, original: existing ? { ...existing } : null };
-    const item = { ...(existing || pendingSelection), ...changesForMode(mode, styles[styleTypeForMode(mode)]) };
+    const item = { ...(existing || pendingSelection), ...changesForMode(mode, config) };
     pendingSelection = item;
     records = [...records.filter((record) => record.id !== item.id), item];
     previewMark(item);
@@ -621,7 +655,31 @@
         });
         placed.push(position);
       });
+    renderBookmarkFlags();
   }
+
+  const flagLayer = document.createElement('div'); flagLayer.id = 'bookmark-flags'; root.append(flagLayer);
+  let flagFrame = 0;
+  function renderBookmarkFlags() {
+    flagLayer.replaceChildren();
+    document.querySelectorAll('mark[data-bookmark-flag]').forEach(mark => {
+      const rect = mark.getClientRects()[0]; if(!rect || rect.bottom < 0 || rect.top > innerHeight) return;
+      const size = LocalMarksUI.flagSize(mark.style.getPropertyValue('--bookmark-size'));
+      const height = Math.min(size.height, Math.max(12, rect.height * .75)), width = Math.min(size.width, height * .55);
+      const block = mark.closest('h1,h2,h3,h4,h5,h6,p,li,td,blockquote');
+      const before = document.createRange(); if(block){before.selectNodeContents(block);before.setEndBefore(mark);}
+      const inline = block && before.toString().trim().length > 0;
+      const blockRect = block?.getBoundingClientRect(), lineHeight = parseFloat(getComputedStyle(block || mark).lineHeight);
+      const aboveInline = inline && Number.isFinite(lineHeight) && lineHeight - rect.height >= height + 3;
+      const left = inline && !aboveInline ? (blockRect?.left || rect.left) - width - 5 : inline ? rect.left : rect.left-width-5;
+      const flag = document.createElement('button'); flag.type='button'; flag.className='bookmark-flag'; flag.setAttribute('aria-label','书签：'+mark.textContent); flag.title='书签';
+      flag.style.cssText=`position:fixed;left:${Math.max(2,left)}px;top:${Math.max(2,aboveInline?rect.top-height-2:rect.top+Math.max(0,(rect.height-height)/2))}px;width:${width}px;height:${height}px;color:${mark.style.getPropertyValue('--bookmark-color')}`;
+      flag.innerHTML='<svg viewBox="0 0 10 18" preserveAspectRatio="none" aria-hidden="true"><path d="M1 0h8a1 1 0 0 1 1 1v17l-5-4-5 4V1a1 1 0 0 1 1-1Z"/></svg>';
+      flag.addEventListener('click',()=>showQuick(mark));flag.addEventListener('mouseenter',event=>beginHover(mark,false,event));flag.addEventListener('mouseleave',scheduleQuickHide); flagLayer.append(flag);
+    });
+  }
+  function scheduleFlags(){cancelAnimationFrame(flagFrame);flagFrame=requestAnimationFrame(renderBookmarkFlags)}
+  document.addEventListener('scroll',scheduleFlags,true); window.addEventListener('resize',scheduleFlags);
 
   function labelFor(item) {
     const labels = [];
@@ -733,192 +791,29 @@
     LocalMarksGroups.render(list, filtered, panelView === "all" ? grouping.value : "none", createItem, collapsedGroups, Boolean(query));
   }
 
-  function renderStyleEditor(container, type, config = styles[type], onChange = () => {}, onPreview = () => {}) {
-    const meta = STYLE_META[type];
-    container.replaceChildren();
-
-    const title = document.createElement("div");
-    title.className = "editor-title";
-    const strong = document.createElement("strong");
-    strong.textContent = `${meta.label}样式`;
-    const hint = document.createElement("small");
-    hint.textContent = "预设或精细调节";
-    title.append(strong, hint);
-
-    const preview = document.createElement("div");
-    preview.className = "style-preview";
-    preview.setAttribute("aria-label", "样式实时预览");
-    const previewText = document.createElement("span");
-    previewText.textContent = "标注效果预览 Aa";
-    preview.appendChild(previewText);
-    const updatePreview = (notify = true) => {
-      const mode = type;
-      previewText.style.cssText = createMark(changesForMode(mode, config), true, true).style.cssText;
-      if (notify) onPreview();
-    };
-    updatePreview(false);
-
-    const colorRow = document.createElement("div");
-    colorRow.className = "setting-row";
-    const colorLabel = document.createElement("span");
-    colorLabel.className = "setting-label";
-    colorLabel.textContent = "颜色";
-    const palette = document.createElement("div");
-    palette.className = "palette";
-    COLORS.forEach((color, index) => {
-      const button = document.createElement("button");
-      button.className = `swatch${config.color.toLowerCase() === color.toLowerCase() ? " selected" : ""}`;
-      button.type = "button";
-      button.style.setProperty("--swatch", color);
-      button.setAttribute("aria-label", `常用颜色 ${index + 1}`);
-      button.addEventListener("click", async () => {
-        config.color = color;
-        updatePreview();
-        await onChange();
-      });
-      palette.appendChild(button);
-    });
-    const customColor = document.createElement("input");
-    customColor.className = "custom-color";
-    customColor.type = "color";
-    customColor.value = config.color;
-    customColor.setAttribute("aria-label", "自定义颜色");
-    customColor.title = "自定义颜色";
-    customColor.addEventListener("change", async () => {
-      config.color = customColor.value;
-      updatePreview();
-      await onChange();
-    });
-    palette.appendChild(customColor);
-    colorRow.append(colorLabel, palette);
-
-    const thicknessRow = document.createElement("div");
-    thicknessRow.className = "setting-row";
-    const thicknessLabel = document.createElement("span");
-    thicknessLabel.className = "setting-label";
-    thicknessLabel.textContent = type === "bookmark" ? "边标" : "粗细";
-    const controls = document.createElement("div");
-    controls.className = "thickness-controls";
-    const presets = document.createElement("div");
-    presets.className = "presets";
-    meta.presets.forEach(([value, label]) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.textContent = label;
-      button.classList.toggle("selected", config.thickness === value);
-      button.addEventListener("click", async () => {
-        config.thickness = value;
-        updatePreview();
-        await onChange();
-      });
-      presets.appendChild(button);
-    });
-    const range = document.createElement("input");
-    range.className = "thickness-range";
-    range.type = "range";
-    range.min = String(meta.min);
-    range.max = String(meta.max);
-    range.step = "1";
-    range.value = String(config.thickness);
-    range.setAttribute("aria-label", `${meta.label}粗细`);
-    const output = document.createElement("output");
-    output.className = "thickness-output";
-    output.textContent = thicknessDescription(type, config.thickness);
-    range.addEventListener("input", () => {
-      config.thickness = Number(range.value);
-      updatePreview();
-      output.textContent = thicknessDescription(type, config.thickness);
-      presets.querySelectorAll("button").forEach((button, index) => button.classList.toggle("selected", meta.presets[index][0] === config.thickness));
-    });
-    range.addEventListener("change", onChange);
-    controls.append(presets, range, output);
-    thicknessRow.append(thicknessLabel, controls);
-
-    container.append(title, preview, colorRow, thicknessRow);
-
-    const opacityRow = document.createElement("div");
-    opacityRow.className = "setting-row";
-    const opacityLabel = document.createElement("span");
-    opacityLabel.className = "setting-label";
-    opacityLabel.textContent = "透明度";
-    const opacityControls = document.createElement("div");
-    opacityControls.className = "thickness-controls";
-    const opacityPresets = document.createElement("div");
-    opacityPresets.className = "presets";
-    [[35, "淡"], [65, "中"], [100, "实"]].forEach(([value, label]) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.textContent = label;
-      button.classList.toggle("selected", config.opacity === value);
-      button.addEventListener("click", async () => {
-        config.opacity = value;
-        updatePreview();
-        await onChange();
-      });
-      opacityPresets.appendChild(button);
-    });
-    const opacityRange = document.createElement("input");
-    opacityRange.className = "thickness-range";
-    opacityRange.type = "range";
-    opacityRange.min = "10";
-    opacityRange.max = "100";
-    opacityRange.step = "1";
-    opacityRange.value = String(config.opacity);
-    opacityRange.setAttribute("aria-label", `${meta.label}透明度`);
-    const opacityOutput = document.createElement("output");
-    opacityOutput.className = "thickness-output";
-    opacityOutput.textContent = `${config.opacity}%`;
-    opacityRange.addEventListener("input", () => {
-      config.opacity = Number(opacityRange.value);
-      updatePreview();
-      opacityOutput.textContent = `${config.opacity}%`;
-      opacityPresets.querySelectorAll("button").forEach((button, index) => button.classList.toggle("selected", [35, 65, 100][index] === config.opacity));
-    });
-    opacityRange.addEventListener("change", onChange);
-    opacityControls.append(opacityPresets, opacityRange, opacityOutput);
-    opacityRow.append(opacityLabel, opacityControls);
-    container.appendChild(opacityRow);
-
-
+  function renderStyleEditor(container, type, config, onChange, onPreview = () => {}) {
+    return LocalMarksUI.renderStyleEditor(container, type, config, async (next) => {
+      Object.assign(config, next);
+      await onChange(next);
+    }, (next) => {
+      Object.assign(config, next);
+      onPreview(next);
+    }, {onResize: () => { if(container === quickSettings) positionQuickSettings(); else positionToolbar(); }});
   }
 
-  async function applyToolbarStyle(mode, message = "已按新样式标注") {
-    const type = styleTypeForMode(mode);
-    const config = styles[type];
-    await saveStyles(type, config);
-    if (pendingSelection) await applyPendingLive(changesForMode(mode, config), message);
+  async function applyToolbarStyle(mode, config = styles[mode], target = pendingSelection) {
+    await saveStyles(mode, config);
+    if (target) await applyPendingLive(changesForMode(mode, config), '', target);
   }
 
   function renderToolbarSettings(mode = toolbarSettingsMode) {
-    settings.replaceChildren();
-    const modes = document.createElement("div");
-    modes.className = "mark-modes";
-    [["bookmark", "书签"], ["highlight", "高亮"], ["underline-solid", "直线"], ["underline-wavy", "波浪"]].forEach(([value, label]) => {
-      const button = document.createElement("button");
-      button.className = `mark-mode${mode === value ? " active" : ""}`;
-      button.type = "button";
-      const icon = value === "bookmark" ? ICONS.bookmark : value === "highlight" ? ICONS.highlighter : value === "underline-wavy" ? ICONS.wave : ICONS.line;
-      button.innerHTML = `${icon}<span>${label}</span>`;
-      button.addEventListener("mousedown", (event) => event.preventDefault());
-      button.addEventListener("click", async () => {
-        toolbarSettingsMode = value;
-        if (value !== "bookmark") toolbarMarkMode = value;
-        await applyToolbarStyle(value);
-      });
-      modes.appendChild(button);
-    });
-    settings.appendChild(modes);
-    const editor = document.createElement("div");
-    editor.className = "style-editor";
-    settings.appendChild(editor);
-    const type = styleTypeForMode(mode);
-    renderStyleEditor(editor, type, styles[type], async () => applyToolbarStyle(mode), () => previewToolbarStyle(mode));
+    const config = {...styles[mode]}, target = pendingSelection ? {...pendingSelection} : null;
+    renderStyleEditor(settings, mode, config, (next) => applyToolbarStyle(mode, next, target), (next) => previewToolbarStyle(mode, next));
   }
 
   function renderStyleEditors() {
-    if (!settings.classList.contains("hidden")) renderToolbarSettings(toolbarSettingsMode);
-    renderStyleEditor(panelStyleEditor, panelStyleType, styles[panelStyleType], () => saveStyles(panelStyleType, styles[panelStyleType]));
-    panelStyleTabs.querySelectorAll("[data-panel-style]").forEach((button) => button.classList.toggle("active", button.dataset.panelStyle === panelStyleType));
+    renderStyleEditor(panelStyleEditor, panelStyleType, {...styles[panelStyleType]}, (next) => saveStyles(panelStyleType, next));
+    panelStyleTabs.querySelectorAll('[data-panel-style]').forEach(button => button.classList.toggle('active', button.dataset.panelStyle === panelStyleType));
   }
 
   function updatePageAction() {
@@ -956,6 +851,7 @@
   }
 
   function showMarkSubmenu() {
+    toolbarSettingsMode = toolbarMarkMode;
     clearTimeout(submenuTimer);
     setCreateMenu("mark");
     markSubmenu.querySelectorAll("[data-mark-mode]").forEach((button) => {
@@ -965,9 +861,12 @@
     });
     $("#add-mark").setAttribute("aria-expanded", "true");
     positionToolbar(true);
+    createTransit?.activate(markSubmenu, $("#add-mark"));
   }
 
   function setCreateMenu(kind) {
+    createTransit?.cancel();
+    if(kind !== 'settings') settings.lmEditor?.flush();
     clearTimeout(submenuTimer);
     for (const [name, menu, button] of [["mark",markSubmenu,$("#add-mark")],["settings",settings,$("#all-options")]]) {
       const open = kind === name;
@@ -1052,19 +951,36 @@
     positionToolbar(false);
   }
 
+  function exactSelection(candidate) {
+    const text = textMap().text;
+    const item = pageRecords().find((record) => {
+      if (record.kind !== "selection") return false;
+      const position = locate(record, text);
+      return position && position.start === candidate.start && position.end === candidate.end && normalizeMatchText(record.quote) === normalizeMatchText(candidate.quote);
+    });
+    // Keep the record's identity and note, but refresh its anchor when it is edited.
+    return item ? { ...item, start: candidate.start, end: candidate.end, quote: candidate.quote, prefix: candidate.prefix, suffix: candidate.suffix } : undefined;
+  }
+
   function overlaps(candidate, exactId) {
-    return pageRecords().some((item) => item.kind === "selection" && item.id !== exactId && candidate.start < item.end && candidate.end > item.start);
+    const text = textMap().text;
+    return pageRecords().some((item) => {
+      if (item.kind !== "selection" || item.id === exactId) return false;
+      // Use the same current-page anchor as rendering, rather than saved offsets.
+      const position = locate(item, text);
+      return position && candidate.start < position.end && candidate.end > position.start;
+    });
   }
 
   async function applyPending(changes, message) {
     if (!pendingSelection) return;
-    const exact = pageRecords().find((item) => item.kind === "selection" && item.start === pendingSelection.start && item.end === pendingSelection.end && item.quote === pendingSelection.quote);
+    const exact = exactSelection(pendingSelection);
     if (overlaps(pendingSelection, exact && exact.id)) {
       showToast("请避免与已有标记部分重叠");
       return;
     }
     const item = { ...(exact || pendingSelection), ...changes, updatedAt: now() };
-    await saveRecord(item);
+    await saveRecord(item,{...changes,start:item.start,end:item.end,quote:item.quote,prefix:item.prefix,suffix:item.suffix},LocalMarksStyles.annotationModes.includes(modeForItem(changes))?modeForItem(changes):null);
     toolbarPreviewBackup = null;
     window.getSelection()?.removeAllRanges();
     pendingSelection = null;
@@ -1073,19 +989,18 @@
     showToast(message);
   }
 
-  async function applyPendingLive(changes, message) {
-    if (!pendingSelection) return;
-    const exact = pageRecords().find((item) => item.kind === "selection" && item.start === pendingSelection.start && item.end === pendingSelection.end && item.quote === pendingSelection.quote);
-    if (overlaps(pendingSelection, exact && exact.id)) {
-      showToast("请避免与已有标记部分重叠");
-      return;
+  async function applyPendingLive(changes, message, target = pendingSelection) {
+    if (!target) return;
+    const exact = exactSelection(target);
+    if (overlaps(target, exact && exact.id)) {
+      showToast('请避免与已有标记部分重叠');
+      throw Error('与已有标记部分重叠');
     }
-    const item = { ...(exact || pendingSelection), ...changes, updatedAt: now() };
-    pendingSelection = item;
-    await saveRecord(item);
-    toolbarPreviewBackup = null;
-    toolbar.classList.add("visible");
-    showToast(message);
+    const item = { ...(exact || target), ...changes, updatedAt: now() };
+    await saveRecord(item, {...changes, updatedAt:item.updatedAt});
+    if (pendingSelection && pendingSelection.start === target.start && pendingSelection.end === target.end && pendingSelection.quote === target.quote) pendingSelection = item;
+    if (toolbarPreviewBackup?.id === item.id) toolbarPreviewBackup = null;
+    if (message) showToast(message);
   }
 
   function showNoteComposer(item, container) {
@@ -1093,7 +1008,8 @@
     cancelQuickHide();
     noteComposerTarget = item;
     noteComposerContainer = container;
-    noteComposerText.value = item?.note || "";
+    noteComposerText.value = item?.note || '';
+    $('#note-save-status').textContent = '输入后自动保存';
     noteComposer.classList.remove("hidden");
     container.appendChild(noteComposer);
     if (container === quick) {
@@ -1103,34 +1019,83 @@
       setCreateMenu(null);
       positionToolbar();
     }
-    noteComposerText.focus();
+    noteComposerText.focus({preventScroll:true});
   }
 
-  async function commitNoteComposer() {
-    if (!noteComposerTarget || noteComposerSaving) return;
-    const target = noteComposerTarget;
-    const note = noteComposerText.value.trim();
-    if (!note) {
-      noteComposer.classList.add("hidden");
-      noteComposerTarget = null;
-      return;
-    }
-    noteComposerSaving = true;
-    try {
-      if (target === pendingSelection) {
-        // A note-only record has no highlight/underline fields, so it will not paint a second annotation.
-        await applyPending({ note, noteStyle: "bubble" }, "笔记已保存");
-      } else {
-        await saveRecord({ ...target, note, noteStyle: "bubble", updatedAt: now() });
-        showToast("笔记已更新");
+  function commitNoteComposer(close = true) {
+    clearTimeout(noteSaveTimer);
+    if (!noteComposerTarget || noteComposing || deletingNoteId === noteComposerTarget.id) return Promise.resolve(false);
+    const target = {...noteComposerTarget}, note = noteComposerText.value;
+    const isNew = !records.some(item => item.id === target.id) && !target.isBookmark && !target.highlightColor && !target.underlineColor;
+    const job = noteSaveQueue.catch(() => {}).then(async () => {
+      noteComposerSaving = true;
+      try {
+        const latest = records.find(item => item.id === target.id);
+        if (!latest && !isNew) throw Error('标记已被删除');
+        if (!latest && !note.trim()) return true;
+        if (!latest && overlaps(target, target.id)) throw Error('选中文字与已有标记重叠');
+        const updated = {...(latest || target), note, noteStyle:'bubble', updatedAt:now()};
+        if (!note.trim() && !updated.isBookmark && !updated.highlightColor && !updated.underlineColor) await deleteRecord(updated.id);
+        else await saveRecord(updated, {note, noteStyle:'bubble', updatedAt:updated.updatedAt});
+        if (noteComposerTarget?.id === target.id) {
+          noteComposerTarget = updated;
+          if (pendingSelection?.id === target.id) pendingSelection = updated;
+          $('#note-save-status').textContent = '已自动保存';
+        }
+        return true;
+      } catch (error) {
+        $('#note-save-status').textContent = '保存失败，请重试';
+        showToast('笔记保存失败，请重试');
+        return false;
+      } finally { noteComposerSaving = false; }
+    });
+    noteSaveQueue = job;
+    return job.then(ok => {
+      if (ok && close && noteComposerTarget?.id === target.id) {
+        noteComposer.classList.add('hidden'); noteComposerTarget = null; noteComposerContainer = null;
+        pendingSelection = null; pendingRect = null; hideToolbar();
       }
+      return ok;
+    });
+  }
+
+  async function deleteNoteWithFeedback(id) {
+    if (!id || deletingNoteId) return;
+    deletingNoteId = id;
+    clearTimeout(noteSaveTimer);
+    cancelHover();
+    const composerMatches = noteComposerTarget?.id === id;
+    if (composerMatches) noteComposerText.disabled = true;
+    const buttons = [...root.querySelectorAll('.note-delete')];
+    buttons.forEach(button => button.disabled = true);
+    try {
+      // Finish already queued autosaves before deleting, then block blur/pagehide resaves.
+      await noteSaveQueue.catch(() => {});
+      const job = recordSaveQueue.catch(() => {}).then(async () => {
+        const item = records.find(record => record.id === id);
+        if (!item?.note?.trim()) return null;
+        const result = await LocalMarksData.mutate({op:'note-delete',id});
+        knownRecordIds.add(id);acceptRecords(result.records);return result;
+      });
+      recordSaveQueue = job;
+      const result = await job;
+      if (composerMatches && noteComposerTarget?.id === id) {
+        noteComposerTarget = null;noteComposerContainer = null;
+        noteComposerText.value = '';noteComposer.classList.add('hidden');
+        pendingSelection = null;pendingRect = null;hideToolbar();
+      }
+      hideNoteTooltip();quick.classList.remove('open');
+      showToast('笔记已删除');
+      LocalMarksUI.offerUndo(toast,result,()=>{},error=>showToast(error.message));
+    } catch (error) {
+      showToast('笔记删除失败，请重试');
+      if (composerMatches) $('#note-save-status').textContent = '删除失败，笔记已保留';
     } finally {
-      noteComposerSaving = false;
-      noteComposer.classList.add("hidden");
-      noteComposerTarget = null;
-      noteComposerContainer = null;
+      deletingNoteId = null;noteComposerText.disabled = false;
+      buttons.forEach(button => button.disabled = false);
     }
   }
+  $('#note-delete').addEventListener('click',()=>deleteNoteWithFeedback(noteComposerTarget?.id));
 
   function openNote(item) {
     showNoteComposer(item || pendingSelection, item ? quick : toolbar);
@@ -1154,11 +1119,11 @@
     editConfig = null;
   }
 
-  async function saveEditedStyle() {
+  async function saveEditedStyle(rememberMode = false) {
     const item = records.find((record) => record.id === styleEditingId);
     if (!item || !editConfig) return;
     await saveStyles(editMode, editConfig);
-    await saveRecord({ ...item, ...changesForMode(editMode, editConfig), updatedAt: now() });
+    const patch=changesForMode(editMode,editConfig);await saveRecord({...item,...patch,updatedAt:now()},patch,rememberMode===true&&LocalMarksStyles.annotationModes.includes(editMode)?editMode:null);
     renderEditControls();
   }
 
@@ -1186,6 +1151,7 @@
   }
 
   function jumpTo(id) {
+    readingAnchor = null;
     panel.classList.remove("open");
     let target = document.querySelector(`mark[data-local-reader-mark="${escapeSelector(id)}"]`);
     if (!target) {
@@ -1220,13 +1186,39 @@
     }
     window.scrollBy({ top: target.getBoundingClientRect().top - desired, behavior: "instant" });
   }
-  function scheduleJumpAlignment() {
-    clearTimeout(jumpResizeTimer);
-    jumpResizeTimer = setTimeout(alignJumpAnchor, 180);
+  let readingAnchor = null;
+  function captureReadingPosition() {
+    readingAnchor = null;
+    jumpAnchor = null;
+    const x = Math.min(innerWidth - 24, innerWidth * .45), y = Math.max(64, innerHeight * .35);
+    const point = document.caretRangeFromPoint?.(x, y);
+    let element = document.elementFromPoint(x, y);
+    if (element === host) element = null;
+    const range = point?.startContainer.nodeType === Node.TEXT_NODE ? point.cloneRange() : null;
+    if (range) {
+      range.setEnd(range.startContainer, Math.min(range.startContainer.length, range.startOffset + 1));
+      element = range.startContainer.parentElement;
+    }
+    const block = element?.closest('p,h1,h2,h3,h4,h5,h6,li,pre,blockquote') || element;
+    const target = range?.getBoundingClientRect().height ? range : block;
+    if (target && target !== document.body && target !== document.documentElement) readingAnchor = {target, element:element || block, top:target.getBoundingClientRect().top, expires:Date.now()+2500};
   }
-  window.addEventListener("resize", scheduleJumpAlignment);
+  function alignReadingPosition() {
+    if (!readingAnchor || Date.now() > readingAnchor.expires) {readingAnchor=null;alignJumpAnchor();return;}
+    const {target,element,top}=readingAnchor;
+    if(!element?.isConnected){readingAnchor=null;return;}
+    for(let parent=element.parentElement;parent;parent=parent.parentElement){
+      const style=getComputedStyle(parent);
+      if(/(auto|scroll)/.test(style.overflowY)&&parent.scrollHeight>parent.clientHeight) parent.scrollBy({top:target.getBoundingClientRect().top-top,behavior:'instant'});
+    }
+    window.scrollBy({top:target.getBoundingClientRect().top-top,behavior:'instant'});
+  }
+  window.addEventListener("resize", () => {
+    clearTimeout(jumpResizeTimer);
+    jumpResizeTimer=setTimeout(alignReadingPosition,180);
+  });
   for (const type of ["wheel", "touchstart"]) document.addEventListener(type, event => {
-    if (!event.composedPath().includes(host)) jumpAnchor = null;
+    if (!event.composedPath().includes(host)) {jumpAnchor = null;readingAnchor = null;}
   }, { passive: true });
 
   function hideNoteTooltip() {
@@ -1246,7 +1238,11 @@
     const text = document.createElement("div"); text.className = "note-card-text"; text.textContent = item.note;
     const open = document.createElement("button"); open.textContent = "查看 / 编辑笔记"; open.type = "button";
     open.addEventListener("click", () => openSidePanel(records.find(record => record.id === noteId)));
-    noteTooltip.append(heading,text,open);
+    const remove = document.createElement("button");remove.className = "note-delete";
+    remove.type = "button";remove.textContent = "删除笔记";remove.setAttribute("aria-label", "删除笔记");
+    remove.addEventListener("click", () => deleteNoteWithFeedback(item.id));
+    const actions = document.createElement("div");actions.className = "note-card-actions";actions.append(open,remove);
+    noteTooltip.append(heading,text,actions);
     noteTooltip.classList.add("visible"); noteTooltip.setAttribute("aria-hidden", "false");
     const anchor = mark.querySelector("[data-local-note-indicator]") || mark;
     const rect = anchor.getBoundingClientRect();
@@ -1265,7 +1261,8 @@
   let pointerPosition = null;
   document.addEventListener("mousemove", event => { pointerPosition = {x:event.clientX,y:event.clientY}; });
   function cancelHover() { clearTimeout(noteHoverTimer); clearTimeout(editHoverTimer); hoverKey = null; }
-  function beginHover(mark, isNote = false) {
+  function beginHover(mark, isNote = false, event) {
+    if (event && quickTransit?.travelling(event)) return;
     isNote = isNote || isNoteOnlyMark(mark);
     cancelQuickHide();
     const key = `${mark.dataset.localReaderMark}:${isNote ? "note" : "edit"}`;
@@ -1281,6 +1278,7 @@
     }
   }
   async function openSidePanel(item, draft) {
+    captureReadingPosition();
     cancelHover(); quick.classList.remove("open"); hideNoteTooltip();
     try {
       const result = await chrome.runtime.sendMessage({ type: "LOCAL_MARKS_SIDE_PANEL", id: item?.id, draft });
@@ -1301,6 +1299,8 @@
   let launcherDrag = null;
   launcher.addEventListener("pointerdown", event => {
     if (event.button !== 0) return;
+    event.preventDefault();
+    captureReadingPosition();
     try { launcher.setPointerCapture?.(event.pointerId); } catch (_) { /* synthetic or unavailable pointer capture */ }
     launcherDrag = { pointerId: event.pointerId, startY: event.clientY, moved: false };
     launcher.classList.add("dragging");
@@ -1330,13 +1330,14 @@
   chrome.runtime.sendMessage({type:"LOCAL_MARKS_PANEL_STATE"}).then(result => { nativePanelOpen = Boolean(result?.open); applyLauncherPreference(); }).catch(() => {});
 
   function cancelQuickHide() {
+    quickTransit?.cancelClose();
     clearTimeout(quickHideTimer);
     quickHideTimer = 0;
   }
 
   function scheduleQuickHide() {
     cancelQuickHide();
-    quickHideTimer = setTimeout(() => {
+    const close = () => {
       cancelHover();
       if (noteId || noteComposerTarget) return;
       setQuickMenu(null);
@@ -1347,7 +1348,8 @@
       quickSettingsButton.setAttribute("aria-expanded", "false");
       quickId = null;
       hideNoteTooltip();
-    }, 250);
+    };
+    if (quickTransit) quickTransit.leave(close); else quickHideTimer = setTimeout(close, 650);
   }
 
   function showQuick(mark, previewNote = false) {
@@ -1367,6 +1369,8 @@
     quickId = mark.dataset.localReaderMark;
     const item = records.find((record) => record.id === quickId);
     if (!item) return;
+    const currentMode = modeForItem(item);
+    $('#quick-edit').innerHTML = LocalMarksUI.icon(currentMode) + '<span>' + LocalMarksUI.labels[currentMode] + ' ⌄</span>';
     quick.classList.add("open");
     positionQuick(mark);
     hideNoteTooltip();
@@ -1382,45 +1386,57 @@
     quick.style.left = `${Math.max(8, Math.min(innerWidth - width - 8, rect.left + rect.width / 2 - width / 2))}px`;
   }
   const quickSettingsButton = document.createElement("button");
-  quickSettingsButton.type = "button"; quickSettingsButton.textContent = "样式";
+  quickSettingsButton.type = 'button'; quickSettingsButton.innerHTML = LocalMarksUI.icon('settings') + '<span>样式</span>';
   quickSettingsButton.setAttribute("aria-expanded", "false");
   const quickSettings = document.createElement("div"); quickSettings.className = "quick-settings style-editor hidden";
-  quick.append(quickSettingsButton, quickSettings);
+  quick.insertBefore(quickSettingsButton, $('#quick-note')); quick.append(quickSettings);
   function showQuickSettings() {
     cancelHover(); cancelQuickHide();
     const item = records.find(record => record.id === quickId);
     if (!item) return;
     setQuickMenu("settings");
-    const mode = modeForItem(item); const config = configFromItem(item, mode);
+    const mode = modeForItem(item); const retained=failedStyleEdits.get(item.id); const config = retained?.mode===mode?{...retained.config}:configFromItem(item, mode);
     quickSettings.classList.remove("hidden"); quickSettingsButton.setAttribute("aria-expanded", "true");
-    renderStyleEditor(quickSettings, mode, config, async () => {
+    renderStyleEditor(quickSettings, mode, config, async (next) => {
       try {
-        await saveStyles(mode, config);
+        await saveStyles(mode, next);
         const latest = records.find(record => record.id === item.id);
-        if (latest) await saveRecord({...latest, ...changesForMode(mode, config), updatedAt:now()});
-        if (quickId === item.id && !quickSettings.classList.contains("hidden")) showQuickSettings();
-      } catch (_) { showToast("保存失败，请重试"); }
+        if (latest) { const patch = {...changesForMode(mode, next),updatedAt:now()}; await saveRecord({...latest,...patch},patch); }
+        failedStyleEdits.delete(item.id);
+      } catch (error) { failedStyleEdits.set(item.id,{mode,config:{...next}});showToast('保存失败，请重试'); throw error; }
     }, () => previewMark({...item,...changesForMode(mode, config)}));
+    if(retained)quickSettings.lmEditor?.markFailed();
     positionQuickSettings();
+    quickTransit?.activate(quickSettings, quickSettingsButton);
   }
   function positionQuickSettings() {
-    // The editor is out of flow: opening it never moves the trigger button.
-    const rect = quick.getBoundingClientRect();
-    const below = innerHeight - rect.bottom - 12, above = rect.top - 12;
-    const useBelow = below >= Math.min(quickSettings.scrollHeight, 340) || below >= above;
-    quickSettings.style.maxHeight = `${Math.max(60, useBelow ? below : above)}px`;
-    quickSettings.style.top = useBelow ? "calc(100% + 6px)" : "auto";
-    quickSettings.style.bottom = useBelow ? "auto" : "calc(100% + 6px)";
-    quickSettings.style.left = `${Math.max(8-rect.left, Math.min(0,innerWidth-rect.left-quickSettings.offsetWidth-8))}px`;
+    const rect = quick.getBoundingClientRect(), width = quickSettings.offsetWidth;
+    const mark = document.querySelector(`mark[data-local-reader-mark="${escapeSelector(quickId || '')}"]`);
+    const selected = mark?.getBoundingClientRect();
+    // When possible, use free space beside the selection instead of covering it.
+    const sideLeft = Math.max(rect.right + 8, (selected?.right || rect.right) + 12);
+    if(sideLeft + width + 10 <= innerWidth){
+      quickSettings.style.left = `${sideLeft-rect.left}px`;quickSettings.style.top='0';quickSettings.style.bottom='auto';quickSettings.style.maxHeight=`${Math.max(60,innerHeight-rect.top-12)}px`;return;
+    }
+    const below = innerHeight - Math.max(rect.bottom,selected?.bottom || 0) - 16, above = rect.top - 12;
+    const down = below >= Math.min(quickSettings.scrollHeight,320) || below >= above;
+    quickSettings.style.maxHeight = `${Math.max(60,down?below:above)}px`;
+    quickSettings.style.top = down ? `${Math.max(rect.bottom+6,(selected?.bottom || 0)+8)-rect.top}px` : 'auto';
+    quickSettings.style.bottom = down ? 'auto' : 'calc(100% + 6px)';
+    quickSettings.style.left = `${Math.max(8-rect.left,Math.min(0,innerWidth-rect.left-width-8))}px`;
   }
   noteTooltip.addEventListener("mouseenter", cancelQuickHide);
   noteTooltip.addEventListener("mouseleave", () => { noteId = null; scheduleQuickHide(); });
-  quickSettingsButton.addEventListener("mouseenter", showQuickSettings);
+  quickTransit = LocalMarksUI.createHoverTransit(quick, [[quickSettings,quickSettingsButton],[quickModeMenu,$('#quick-edit')]], () => quick.classList.contains('open'));
+  createTransit = LocalMarksUI.createHoverTransit(toolbar, [[settings,$('#all-options')],[markSubmenu,$('#add-mark')]], () => toolbar.classList.contains('visible'));
+  quickSettingsButton.addEventListener("mouseenter", event => quickTransit.request(showQuickSettings,event,quickSettings));
   quickSettingsButton.addEventListener("focus", showQuickSettings);
   quickSettingsButton.addEventListener("click", showQuickSettings);
   quick.addEventListener("mouseenter", () => { cancelQuickHide(); });
   quick.addEventListener("mouseleave", () => { scheduleQuickHide(); });
   function setQuickMenu(kind) {
+    quickTransit?.cancel();
+    if(kind !== 'settings') quickSettings.lmEditor?.flush();
     for (const [name, menu, button] of [["mode",quickModeMenu,$("#quick-edit")],["settings",quickSettings,quickSettingsButton]]) {
       const open = kind === name;
       menu.classList.toggle("hidden", !open); menu.inert = !open;
@@ -1428,10 +1444,12 @@
     }
   }
   for (const button of [$("#quick-note"),$("#quick-delete")]) {
-    for (const event of ["mouseenter","focus"]) button.addEventListener(event, () => setQuickMenu(null));
+    button.addEventListener("mouseenter", event => quickTransit.request(() => setQuickMenu(null),event));
+    button.addEventListener("focus", () => setQuickMenu(null));
   }
   for (const button of [$("#add-bookmark"),$("#add-note")]) {
-    for (const event of ["mouseenter","focus"]) button.addEventListener(event, () => setCreateMenu(null));
+    button.addEventListener("mouseenter", event => createTransit.request(() => setCreateMenu(null),event));
+    button.addEventListener("focus", () => setCreateMenu(null));
   }
   setCreateMenu(null); setQuickMenu(null);
   function showQuickModeMenu() {
@@ -1451,8 +1469,9 @@
     const toLeft = quickRect.left + menuRect.width + 8 > innerWidth;
     quickModeMenu.style.left = toLeft ? "auto" : "0";
     quickModeMenu.style.right = toLeft ? "0" : "auto";
+    quickTransit?.activate(quickModeMenu, $("#quick-edit"));
   }
-  $("#quick-edit").addEventListener("mouseenter", showQuickModeMenu);
+  $("#quick-edit").addEventListener("mouseenter", event => quickTransit.request(showQuickModeMenu,event,quickModeMenu));
   $("#quick-edit").addEventListener("focus", showQuickModeMenu);
   quickModeMenu.addEventListener("click", async (event) => {
     const button = event.target.closest("[data-quick-mode]");
@@ -1464,7 +1483,7 @@
     buttons.forEach((candidate) => { candidate.disabled = true; });
     cancelQuickHide();
     try {
-      await saveRecord({ ...item, ...changesForMode(mode, configForModeChange(item, mode)), updatedAt: now() });
+      const patch=changesForMode(mode,configForModeChange(item,mode));await saveRecord({...item,...patch,updatedAt:now()},patch,LocalMarksStyles.annotationModes.includes(mode)?mode:null);
       quick.classList.remove("open");
       quickModeMenu.classList.add("hidden");
       $("#quick-edit").setAttribute("aria-expanded", "false");
@@ -1478,10 +1497,7 @@
   root.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return;
     if (noteComposerTarget) {
-      noteComposerTarget = null;
-      noteComposerContainer = null;
-      noteComposer.classList.add("hidden");
-      quick.classList.remove("open");
+      commitNoteComposer().then(ok => { if(ok) quick.classList.remove('open'); });
     }
     else if (editOverlay.classList.contains("open")) closeEdit();
     else if (overlay.classList.contains("open")) closeNote(true);
@@ -1552,7 +1568,7 @@
       hideToolbar();
       quick.classList.remove("open");
       quickId = null;
-      await saveRecords(remaining);
+      const result=await LocalMarksData.mutate({op:'delete',ids:clearSnapshot});acceptRecords(result.records);
       clearConfirmation.classList.add("hidden");
       clearSnapshot = [];
       showToast(remaining.length ? "已清空确认范围内的标记，保留了新添加的记录" : "已清空所有标记");
@@ -1577,34 +1593,44 @@
   $("#add-mark").addEventListener("click", () => applyPending(changesForMode(toolbarMarkMode, styles[styleTypeForMode(toolbarMarkMode)]), "标注已保存"));
   $("#add-mark").setAttribute("aria-haspopup", "true");
   $("#add-mark").setAttribute("aria-expanded", "false");
-  $("#add-mark").addEventListener("mouseenter", showMarkSubmenu);
+  $('#add-bookmark').addEventListener('mouseenter', () => { toolbarSettingsMode = 'bookmark'; });
+  $('#add-bookmark').addEventListener('focus', () => { toolbarSettingsMode = 'bookmark'; });
+  $("#add-mark").addEventListener("mouseenter", event => createTransit.request(showMarkSubmenu,event,markSubmenu));
   $("#add-mark").addEventListener("focus", showMarkSubmenu);
   toolbar.addEventListener("mouseleave", () => {
     clearTimeout(submenuTimer);
-    submenuTimer = setTimeout(() => setCreateMenu(null), 250);
+    createTransit.leave(() => setCreateMenu(null));
   });
-  toolbar.addEventListener("mouseenter", () => clearTimeout(submenuTimer));
+  toolbar.addEventListener("mouseenter", () => { clearTimeout(submenuTimer); createTransit.cancelClose(); });
   markSubmenu.addEventListener("mousedown", (event) => event.preventDefault());
   markSubmenu.addEventListener("click", (event) => {
     const button = event.target.closest("[data-mark-mode]");
     if (!button) return;
-    toolbarMarkMode = button.dataset.markMode;
-    toolbarSettingsMode = toolbarMarkMode;
-    applyPending(changesForMode(toolbarMarkMode, styles[styleTypeForMode(toolbarMarkMode)]), "标注已保存");
+    const mode = button.dataset.markMode;
+    applyPending(changesForMode(mode, styles[styleTypeForMode(mode)]), "标注已保存");
   });
   $("#all-options").addEventListener("mousedown", (event) => event.preventDefault());
   function showToolbarSettings() {
     setCreateMenu("settings");
     renderToolbarSettings(toolbarSettingsMode);
     positionToolbar(true);
+    createTransit?.activate(settings, $("#all-options"));
   }
   $("#all-options").addEventListener("click", showToolbarSettings);
-  $("#all-options").addEventListener("mouseenter", showToolbarSettings);
+  $("#all-options").addEventListener("mouseenter", event => createTransit.request(showToolbarSettings,event,settings));
   $("#all-options").addEventListener("focus", showToolbarSettings);
   $("#add-note").addEventListener("mousedown", (event) => event.preventDefault());
   $("#add-note").addEventListener("click", () => pendingSelection && openNote(null));
+  function scheduleNoteSave() {
+    clearTimeout(noteSaveTimer);
+    if (noteComposing) return;
+    noteSaveTimer = setTimeout(() => commitNoteComposer(false), 350);
+  }
+  noteComposerText.addEventListener('input', scheduleNoteSave);
+  noteComposerText.addEventListener('compositionstart', () => { noteComposing = true; clearTimeout(noteSaveTimer); });
+  noteComposerText.addEventListener('compositionend', () => { noteComposing = false; scheduleNoteSave(); });
   noteComposerText.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && !event.shiftKey) {
+    if (event.key === "Enter" && !event.shiftKey && !event.isComposing && !noteComposing) {
       event.preventDefault();
       commitNoteComposer();
     }
@@ -1627,7 +1653,7 @@
     if (!note) return showToast("请先填写笔记内容");
     if (editingId) {
       const item = records.find((record) => record.id === editingId);
-      if (item) await saveRecord({ ...item, note, updatedAt: now() });
+      if (item) await saveRecord({ ...item, note, updatedAt: now() },{note});
       closeNote(false);
       showToast("笔记已更新");
     } else {
@@ -1645,12 +1671,9 @@
     if (!item) return;
     editMode = button.dataset.editMode;
     editConfig = configForModeChange(item, editMode);
-    await saveEditedStyle();
+    await saveEditedStyle(true);
   });
-  $("#quick-edit").addEventListener("click", () => {
-    const item = records.find((record) => record.id === quickId);
-    if (item) openEdit(item);
-  });
+  $('#quick-edit').addEventListener('click', showQuickModeMenu);
   $("#quick-note").addEventListener("click", () => {
     const item = records.find((record) => record.id === quickId);
     quick.classList.remove("open");
@@ -1669,9 +1692,9 @@
   document.addEventListener("keyup", (event) => {
     if (event.key === "Shift" || event.key.startsWith("Arrow")) setTimeout(prepareSelection, 0);
   });
-  document.addEventListener("mousedown", (event) => {
+  document.addEventListener("mousedown", async (event) => {
     if (event.composedPath().includes(host)) return;
-    if (noteComposerTarget) commitNoteComposer();
+    if (noteComposerTarget && !await commitNoteComposer()) return;
     cancelHover();
     hideToolbar();
     pendingSelection = null;
@@ -1695,7 +1718,7 @@
   });
   document.addEventListener("mouseover", (event) => {
     const mark = event.target.closest?.("mark[data-local-reader-mark]");
-    if (mark && (isNoteOnlyMark(mark) || !window.getSelection()?.toString().trim())) beginHover(mark, Boolean(event.target.closest?.("[data-local-note-indicator]") || isNoteOnlyMark(mark)));
+    if (mark && (isNoteOnlyMark(mark) || !window.getSelection()?.toString().trim())) beginHover(mark, Boolean(event.target.closest?.("[data-local-note-indicator]") || isNoteOnlyMark(mark)), event);
   });
   document.addEventListener("mouseout", (event) => {
     const mark = event.target.closest?.("mark[data-local-reader-mark]");
@@ -1723,13 +1746,19 @@
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
+    if (changes.readerMarksAnnotationModeV1) {
+      toolbarMarkMode = LocalMarksStyles.annotationMode(changes.readerMarksAnnotationModeV1.newValue);
+      toolbarSettingsMode = toolbarMarkMode;
+    }
     if (changes.readerMarksEntryV1) applyLauncherPreference(changes.readerMarksEntryV1.newValue);
     if (changes[GROUPING_KEY]) {
       grouping.value = ["page", "site", "none"].includes(changes[GROUPING_KEY].newValue) ? changes[GROUPING_KEY].newValue : "page";
       renderList();
     }
     if (changes[STORAGE_KEY]) {
+      const previousPage = JSON.stringify(pageRecords());
       const nextRecords = changes[STORAGE_KEY].newValue || [];
+      nextRecords.forEach(item => knownRecordIds.add(item.id));
       const pendingRemoved = pendingSelection && records.some((item) => item.id === pendingSelection.id)
         && !nextRecords.some((item) => item.id === pendingSelection.id);
       records = nextRecords;
@@ -1746,7 +1775,7 @@
         quickModeMenu.classList.add("hidden");
         quickId = null;
       }
-      refresh();
+      if(previousPage!==JSON.stringify(pageRecords()))refresh();else renderList();
     }
     if (changes[STYLE_KEY]) {
       styles = normalizeStyles(changes[STYLE_KEY].newValue || {});
@@ -1755,7 +1784,13 @@
   });
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message?.type === "LOCAL_MARKS_PANEL_VISIBILITY") { nativePanelOpen = Boolean(message.open); applyLauncherPreference(); scheduleJumpAlignment(); sendResponse({ok:true}); return false; }
+    if (message?.type === "LOCAL_MARKS_PANEL_VISIBILITY") { nativePanelOpen = Boolean(message.open); applyLauncherPreference(); clearTimeout(jumpResizeTimer); jumpResizeTimer=setTimeout(alignReadingPosition,180); sendResponse({ok:true}); return false; }
+    if (message?.type === 'LOCAL_MARKS_VALIDATE_SELECTION') {
+      const position = locate(message.selection, textMap().text);
+      if(!position){sendResponse({ok:false,error:'网页内容已变化，请重新选择原文'});return false;}
+      const candidate = {...message.selection,...position}, exact = exactSelection(candidate);
+      sendResponse({ok:!overlaps(candidate,exact?.id),position,error:'选中文字与已有标记部分重叠'});return false;
+    }
     if (message?.type === "LOCAL_MARKS_PREVIEW") {
       const item = records.find(record => record.id === message.id);
       if (item) previewMark(message.record || item);
@@ -1785,6 +1820,17 @@
     restoreTimer = setTimeout(renderMarks, 700);
   });
   if (document.body) observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+
+  window.addEventListener('pagehide', () => {
+    if(noteComposerTarget && deletingNoteId !== noteComposerTarget.id){
+      chrome.runtime.sendMessage({type:'LOCAL_MARKS_FINAL_SAVE',record:{...noteComposerTarget},allowCreate:!knownRecordIds.has(noteComposerTarget.id),note:noteComposing?noteComposerTarget.note:noteComposerText.value}).catch(()=>{});
+    }
+    const createDirty=settings.lmEditor?.isDirty(),editDirty=quickSettings.lmEditor?.isDirty();
+    const target=createDirty?pendingSelection:editDirty?records.find(item=>item.id===quickId):null;
+    if(target){const mode=createDirty?toolbarSettingsMode:modeForItem(target),config=createDirty?settings.lmEditor.config:quickSettings.lmEditor.config;
+      chrome.runtime.sendMessage({type:'LOCAL_MARKS_FINAL_SAVE',record:{...target},allowCreate:!knownRecordIds.has(target.id),stylePatch:changesForMode(mode,config),styleMode:mode,styleConfig:{...config}}).catch(()=>{});
+    }
+  });
 
   setInterval(() => {
     const nextUrl = pageUrl();

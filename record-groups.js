@@ -11,10 +11,14 @@ const LocalMarksGroups = (() => {
     }
   }
 
+  function compareCreated(a, b) {
+    const timestamp = item => Date.parse(item.createdAt || item.updatedAt) || 0;
+    return timestamp(b) - timestamp(a) || String(a.id || '').localeCompare(String(b.id || ''));
+  }
+
   function groupRecords(records, mode = "page") {
     const groups = new Map();
-    const timestamp = (item) => Date.parse(item.updatedAt || item.createdAt) || 0;
-    const sorted = [...records].sort((a, b) => timestamp(b) - timestamp(a));
+    const sorted = [...records].sort(compareCreated);
     sorted.forEach((item) => {
       const url = normalizeUrl(item.url);
       let key = url;
@@ -38,7 +42,7 @@ const LocalMarksGroups = (() => {
     container.replaceChildren();
     if (mode === "none") {
       [...records]
-        .sort((a, b) => (Date.parse(b.updatedAt || b.createdAt) || 0) - (Date.parse(a.updatedAt || a.createdAt) || 0))
+        .sort(compareCreated)
         .forEach((item) => container.appendChild(createItem(item)));
       return;
     }
@@ -46,6 +50,7 @@ const LocalMarksGroups = (() => {
       const li = document.createElement("li");
       li.className = "record-group";
       const details = document.createElement("details");
+      details.dataset.groupKey = group.key;
       details.open = forceOpen || !collapsed.has(group.key);
       const summary = document.createElement("summary");
       const title = document.createElement("span");
@@ -73,7 +78,7 @@ const LocalMarksGroups = (() => {
     });
   }
 
-  return { normalizeUrl, groupRecords, render };
+  return { normalizeUrl, compareCreated, groupRecords, render };
 })();
 
 if (typeof module !== "undefined" && module.exports) module.exports = LocalMarksGroups;

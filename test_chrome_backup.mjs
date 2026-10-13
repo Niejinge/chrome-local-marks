@@ -40,3 +40,8 @@ assert.throws(() => backup.parse(backup.create([{ ...selection, start: -1 }], st
 assert.throws(() => backup.parse(backup.create([{ ...selection, note: 'x'.repeat(10001) }], styles)), /长度/);
 assert.equal(backup.parse(backup.create([{ ...selection, note: '<script>test</script>' }], styles)).records[0].note, '<script>test</script>');
 console.log('Backup round-trip, merge, and invalid-file checks passed.');
+
+const complete=[{...page,note:'网页收藏中文笔记'},...['bookmark','highlight','underline-solid','underline-wavy','note'].map((type,index)=>({...selection,id:'full-'+type,isBookmark:type==='bookmark',highlightColor:type==='highlight'?'#f2bd55':'',underlineColor:type.startsWith('underline')?'#65b883':'',underlineStyle:type==='underline-wavy'?'wavy':'solid',note:'中文笔记 '+index}))];
+const round=backup.parse(backup.create(complete,styles));
+assert.deepEqual(round.records.map(x=>x.note),complete.map(x=>x.note));assert.equal(round.records[0].kind,'page');assert.deepEqual(backup.parse(backup.create(round.records,round.styles)),round);
+console.log('All six record types preserve notes, styles and positions on repeated backup round trips.');

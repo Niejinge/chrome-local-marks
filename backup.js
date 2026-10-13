@@ -44,7 +44,7 @@ const LocalMarksBackup = (() => {
       createdAt: string(source.createdAt, 64),
       updatedAt: string(source.updatedAt, 64)
     };
-    if (kind === "page") return common;
+    if (kind === "page") return {...common, note:string(source.note,10000)};
     const quote = string(source.quote, 2000);
     const start = source.start;
     const end = source.end;
