@@ -16,7 +16,7 @@ cp dist/chrome-local-marks-360-preview-0.7.5.zip dist/chrome-local-marks-360-pre
 python3 -B -c "from pathlib import Path; import hashlib; files=[Path('dist/chrome-local-marks-360-preview-0.7.5.zip'),Path('dist/chrome-local-marks-360-preview.zip')]; Path('dist/SHA256SUMS.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n' for p in files))"
 git tag v0.7.5-360-preview
 git push origin v0.7.5-360-preview
-gh release create v0.7.5-360-preview --verify-tag --prerelease --latest=false --title 'v0.7.5 360 兼容预览' --notes-file .local-maintainer/release-notes.md \
+gh release create v0.7.5-360-preview --verify-tag --target compat/360-chromium-132 --prerelease --latest=false --title 'v0.7.5 360 兼容预览' --notes-file .local-maintainer/release-notes.md \
   dist/chrome-local-marks-360-preview-0.7.5.zip dist/chrome-local-marks-360-preview.zip dist/SHA256SUMS.txt
 ```
 
