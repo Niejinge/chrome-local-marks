@@ -4,7 +4,7 @@
 
 此分支为 `compat/360-chromium-132`，面向 Chromium 132 的 360 极速浏览器 Pro。Chrome 稳定版仍保留在 [main](https://github.com/Niejinge/chrome-local-marks/tree/main) 和 [v0.7.4](https://github.com/Niejinge/chrome-local-marks/releases/tag/v0.7.4)，两者使用不同安装目录。兼容版使用独立标记管理窗口，保留本页／全部、详情、定位与自动保存，不申请原生侧栏权限。
 
-[Chrome 稳定版下载](https://github.com/Niejinge/chrome-local-marks/releases/latest) · [反馈问题](https://github.com/Niejinge/chrome-local-marks/issues) · [更新记录](CHANGELOG.md)
+[360 兼容预览下载](https://github.com/Niejinge/chrome-local-marks/releases/tag/v0.7.5-360-preview) · [Chrome 稳定版下载](https://github.com/Niejinge/chrome-local-marks/releases/latest) · [反馈问题](https://github.com/Niejinge/chrome-local-marks/issues) · [更新记录](CHANGELOG.md)
 
 ![网页标记和样式菜单](docs/images/webpage.png)
 
@@ -18,7 +18,9 @@
 
 ## 安装
 
-兼容目标为 **Chromium 132 或以上**。此分支仍属兼容预览，不替代 Chrome 稳定版。开发者可克隆此分支后运行 `python3 -B package_release.py`，生成 `dist/chrome-local-marks-360-unpacked` 及 `dist/chrome-local-marks-360-preview-0.7.5.zip`。
+兼容目标为 **Chromium 132 或以上**，已实测 macOS arm64 的 360 极速浏览器 Pro 16.0.1098.0；Windows 版及其它内核版本尚未实测。此分支仍属兼容预览，不替代 Chrome 稳定版。
+
+直接下载 [360 兼容插件 ZIP](https://github.com/Niejinge/chrome-local-marks/releases/download/v0.7.5-360-preview/chrome-local-marks-360-preview.zip)，版本说明和 SHA-256 校验文件见 [预发布版本](https://github.com/Niejinge/chrome-local-marks/releases/tag/v0.7.5-360-preview)。开发者也可克隆此分支后运行 `python3 -B package_release.py`，生成 `dist/chrome-local-marks-360-unpacked` 及 `dist/chrome-local-marks-360-preview-0.7.5.zip`。
 
 以下使用兼容包安装：
 
