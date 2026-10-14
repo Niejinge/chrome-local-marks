@@ -90,7 +90,11 @@ try{
 
  checks.push('compatibility window opens without moving reading position');
  if(!await evaluate("document.querySelector('#current-page-title').textContent==='原生扩展验收'",sideSession))throw Error('Compatibility view uses wrong source tab');checks.push('compatibility view uses original browser tab');
+ const sourceWindowId=Number(new URL(side.url).searchParams.get('sourceWindowId'));
+ await evaluate("chrome.windows.update(chrome.windows.WINDOW_ID_CURRENT,{focused:true})",sideSession);
  await evaluate("document.querySelector('#collapse-panel').click()",sideSession);await sleep(400);
+ if(!await evaluate(`chrome.windows.get(${sourceWindowId}).then(win=>win.focused)`,panelSession))throw Error('Closing manager did not focus source window');
+ checks.push('closing compatibility manager returns focus to original article window');
  const panelState=await evaluate("chrome.storage.session.get('readerMarksPanelWindows')",panelSession);
  if(Object.values(panelState.readerMarksPanelWindows||{}).some(Boolean))throw Error('Native panel visibility did not close');checks.push('compatibility window closes and keeps page entry available');
  const compatState=await evaluate("chrome.storage.session.get('readerMarksCompatWindowsV1')",panelSession);

@@ -25,7 +25,17 @@
     }).catch(()=>{});
     $('collapse-panel').addEventListener('click',async()=>{
       if(!await flush())return;
-      try{const win=await chrome.windows.getCurrent();if(compatibility)await chrome.windows.remove(win.id);else await chrome.sidePanel.close({windowId:win.id});}
+      try{
+        const win=await chrome.windows.getCurrent();
+        if(compatibility){
+          // Return to the article before destroying this window's execution context.
+          if(sourceWindow && sourceWindow!==win.id){
+            try{await chrome.windows.update(sourceWindow,{focused:true});}
+            catch(_){/* The source may already have closed; still allow closing this window. */}
+          }
+          await chrome.windows.remove(win.id);
+        }else await chrome.sidePanel.close({windowId:win.id});
+      }
       catch(_){$('collapse-panel').title=compatibility?'未能关闭，请使用窗口关闭按钮':'未能收起，请使用浏览器侧栏顶部的关闭按钮';}
     });
   }

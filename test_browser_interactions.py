@@ -39,7 +39,7 @@ chrome.storage = {
 };
 chrome.runtime = { getURL:path=>'chrome-extension://test/'+path,onMessage: { addListener(fn) { testStore.runtimeListeners.push(fn); } }, sendMessage: async message => { testStore.messages.push(message);if(message.type==='LOCAL_MARKS_MUTATE'){try{testStore.writer ||= LocalMarksStore.create(chrome.storage.local);return {ok:true,result:await testStore.writer.mutate(message.command)}}catch(error){return {ok:false,error:error.message}}}if(message.type==='LOCAL_MARKS_OPEN_RECORD'){if(testStore.navigationFailure)return {ok:false};return {ok:true,jumped:true,tabId:1}} } };
 chrome.storage.session = {get:async()=>testStore.session||{}};
-chrome.windows = {getCurrent:async()=>({id:1}),remove:async id=>{testStore.closedWindow=id}};
+chrome.windows = {getCurrent:async()=>({id:1}),update:async(id,options)=>{testStore.windowActions||=[];testStore.windowActions.push(['focus',id,options]);if(testStore.failFocus)throw Error('Source window closed');},remove:async id=>{testStore.windowActions||=[];testStore.windowActions.push(['close',id]);testStore.closedWindow=id}};
 chrome.sidePanel={getLayout:async()=>({side:'right'}),close:async options=>{testStore.closedWindow=options.windowId}};
 chrome.tabs = { create:async options=>{testStore.createdTab=options;return {id:88,...options}},onActivated:{addListener:fn=>testStore.tabListeners.push(fn)},query: async options => {testStore.queries||=[];testStore.queries.push(options);return [{id: 1, url: location.href, title: '测试页面'}]}, sendMessage: async () => ({ok:true}) };
 const makeSelection = (id, url, title, quote) => ({id, url, title, quote, kind:'selection', start:0, end:quote.length,
@@ -172,6 +172,10 @@ CHECKS = r'''
     check(testStore.createdTab?.windowId===3 && testStore.createdTab.url.includes('library=1'),'library opens in original browser window');
     $('#collapse-panel').click();await pause();
     check(testStore.closedWindow===1,'compatibility close removes only its own window');
+    check(JSON.stringify(testStore.windowActions)===JSON.stringify([['focus',3,{focused:true}],['close',1]]),'compatibility close returns to source before removing manager');
+    testStore.failFocus=true;testStore.closedWindow=null;
+    $('#collapse-panel').click();await pause();
+    check(testStore.closedWindow===1,'compatibility close still works when source no longer exists');
     finish();return;
   }
   if (TEST_CASE === 'content-note-delete') {
