@@ -18,7 +18,7 @@ class ExtensionTests(unittest.TestCase):
 
     def test_manifest_v3_and_local_permissions(self):
         self.assertEqual(self.manifest["manifest_version"], 3)
-        self.assertEqual(self.manifest["version"], "0.7.4")
+        self.assertEqual(self.manifest["version"], "0.7.5")
         self.assertIn("storage", self.manifest["permissions"])
         self.assertNotIn("tabs", self.manifest["permissions"])
         self.assertNotIn("identity", self.manifest["permissions"])
@@ -64,9 +64,10 @@ class ExtensionTests(unittest.TestCase):
         for token in ["quick-edit", "edit-overlay", "edit-style-editor", "saveEditedStyle", "data-edit-mode"]:
             self.assertIn(token, self.content)
 
-    def test_native_side_panel_and_fixed_hover_delays(self):
-        self.assertIn("sidePanel", self.manifest["permissions"])
-        self.assertEqual(self.manifest["side_panel"]["default_path"], "popup.html")
+    def test_compat_window_and_fixed_hover_delays(self):
+        self.assertNotIn("sidePanel", self.manifest["permissions"])
+        self.assertEqual(self.manifest["minimum_chrome_version"], "132")
+        self.assertNotIn("side_panel", self.manifest)
         self.assertNotIn("default_popup", self.manifest["action"])
         for token in ["}, 700)", "300)", "quickTransit.leave(close)", "prefers-reduced-motion", "opacity 140ms"]:
             self.assertIn(token, self.content)
@@ -165,7 +166,7 @@ class ExtensionTests(unittest.TestCase):
             with mock.patch.object(package_release, "ROOT", source_root):
                 package_release.main()
             self.assertFalse((source_root / "__pycache__").exists())
-            install_dir = source_root / "dist" / "chrome-local-marks-unpacked"
+            install_dir = source_root / "dist" / "chrome-local-marks-360-unpacked"
             actual = {str(path.relative_to(install_dir)) for path in install_dir.rglob("*") if path.is_file()}
             self.assertEqual(actual, set(RELEASE_FILES))
             self.assertFalse(any(part.startswith("_") for path in actual for part in pathlib.PurePosixPath(path).parts))

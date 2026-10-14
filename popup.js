@@ -13,6 +13,11 @@ const importStyles = document.getElementById("import-styles");
 const backupStatus = document.getElementById("backup-status");
 let records = [];
 let activeTab = null;
+const compatSourceWindow = Number(new URLSearchParams(location.search).get('sourceWindowId')) || null;
+async function getActivePageTab() {
+  const [tab] = await chrome.tabs.query(compatSourceWindow ? {active:true,windowId:compatSourceWindow} : {active:true,currentWindow:true});
+  return tab || null;
+}
 let activeFilter = "all";
 let recordSelectedId = null;
 let currentPageOnly = !new URLSearchParams(location.search).has("library");
@@ -200,7 +205,7 @@ function render() {
     const actions=document.createElement('div');actions.className='record-actions';
     const locate=document.createElement('button');locate.className='record-locate';locate.type='button';locate.textContent='定位';locate.setAttribute('aria-label','定位原文');locate.title='定位原文';
     locate.addEventListener('click',async()=>{
-      try{const result=await chrome.runtime.sendMessage({type:'LOCAL_MARKS_OPEN_RECORD',record:item});if(result?.ok===false||result?.jumped===false&&item.kind==='selection')listError('无法定位原文，请刷新网页后重试');}catch(_){listError('无法定位原文，请刷新网页后重试');}
+      try{const result=await chrome.runtime.sendMessage({type:'LOCAL_MARKS_OPEN_RECORD',record:item,sourceWindowId:compatSourceWindow});if(result?.ok===false||result?.jumped===false&&item.kind==='selection')listError('无法定位原文，请刷新网页后重试');}catch(_){listError('无法定位原文，请刷新网页后重试');}
     });
     const remove=document.createElement('button');remove.className='delete icon-button';remove.type='button';remove.innerHTML=LocalMarksUI.icon('trash');remove.setAttribute('aria-label','删除此标记');remove.title='删除此标记';
     remove.addEventListener('click',async()=>{
@@ -277,21 +282,19 @@ filters.addEventListener("click", (event) => {
 });
 
 document.getElementById("open-page-panel").addEventListener("click", () => {
-  chrome.tabs.create({ url: chrome.runtime.getURL("popup.html?library=1") });
+  chrome.tabs.create({ url: chrome.runtime.getURL("popup.html?library=1"), ...(compatSourceWindow ? {windowId:compatSourceWindow} : {}) });
 });
 document.getElementById("scope-current").addEventListener("click", () => { currentPageOnly = true; render(); });
 document.getElementById("scope-all").addEventListener("click", () => { currentPageOnly = false; render(); });
 async function updateActiveTab() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  activeTab = tab || null;
+  activeTab = await getActivePageTab();
   render();
 }
-chrome.tabs.onActivated?.addListener(updateActiveTab);
+chrome.tabs.onActivated?.addListener(info=>{if(!compatSourceWindow||info.windowId===compatSourceWindow)updateActiveTab();});
 chrome.tabs.onUpdated?.addListener((id, info) => { if (id === activeTab?.id && (info.url || info.status === "complete")) updateActiveTab(); });
 
 async function init() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  activeTab = tab || null;
+  activeTab = await getActivePageTab();
   const result = await chrome.storage.local.get([STORAGE_KEY, GROUPING_KEY]);
   grouping.value = ["page", "site", "none"].includes(result[GROUPING_KEY]) ? result[GROUPING_KEY] : "page";
   records = Array.isArray(result[STORAGE_KEY]) ? result[STORAGE_KEY] : [];

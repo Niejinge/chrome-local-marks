@@ -38,8 +38,8 @@ def main():
     manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
     output_dir = ROOT / "dist"
     output_dir.mkdir(exist_ok=True)
-    install_dir = output_dir / "chrome-local-marks-unpacked"
-    staging_dir = output_dir / ".chrome-local-marks-unpacked.tmp"
+    install_dir = output_dir / "chrome-local-marks-360-unpacked"
+    staging_dir = output_dir / ".chrome-local-marks-360-unpacked.tmp"
     if staging_dir.exists():
         shutil.rmtree(staging_dir)
     staging_dir.mkdir()
@@ -54,7 +54,7 @@ def main():
         shutil.rmtree(install_dir)
     staging_dir.replace(install_dir)
 
-    output = output_dir / f"chrome-local-marks-release-{manifest['version']}.zip"
+    output = output_dir / f"chrome-local-marks-360-preview-{manifest['version']}.zip"
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for relative in RELEASE_FILES:
             source = ROOT / relative

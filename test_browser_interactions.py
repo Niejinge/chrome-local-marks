@@ -37,11 +37,11 @@ chrome.storage = {
   },
   onChanged: { addListener: fn => testStore.listeners.push(fn) }
 };
-chrome.runtime = { onMessage: { addListener(fn) { testStore.runtimeListeners.push(fn); } }, sendMessage: async message => { testStore.messages.push(message);if(message.type==='LOCAL_MARKS_MUTATE'){try{testStore.writer ||= LocalMarksStore.create(chrome.storage.local);return {ok:true,result:await testStore.writer.mutate(message.command)}}catch(error){return {ok:false,error:error.message}}}if(message.type==='LOCAL_MARKS_OPEN_RECORD'){if(testStore.navigationFailure)return {ok:false};return {ok:true,jumped:true,tabId:1}} } };
-chrome.storage.session = {get:async()=>({})};
-chrome.windows = {getCurrent:async()=>({id:1})};
+chrome.runtime = { getURL:path=>'chrome-extension://test/'+path,onMessage: { addListener(fn) { testStore.runtimeListeners.push(fn); } }, sendMessage: async message => { testStore.messages.push(message);if(message.type==='LOCAL_MARKS_MUTATE'){try{testStore.writer ||= LocalMarksStore.create(chrome.storage.local);return {ok:true,result:await testStore.writer.mutate(message.command)}}catch(error){return {ok:false,error:error.message}}}if(message.type==='LOCAL_MARKS_OPEN_RECORD'){if(testStore.navigationFailure)return {ok:false};return {ok:true,jumped:true,tabId:1}} } };
+chrome.storage.session = {get:async()=>testStore.session||{}};
+chrome.windows = {getCurrent:async()=>({id:1}),remove:async id=>{testStore.closedWindow=id}};
 chrome.sidePanel={getLayout:async()=>({side:'right'}),close:async options=>{testStore.closedWindow=options.windowId}};
-chrome.tabs = { onActivated:{addListener:fn=>testStore.tabListeners.push(fn)},query: async () => [{id: 1, url: location.href, title: '测试页面'}], sendMessage: async () => ({ok:true}) };
+chrome.tabs = { create:async options=>{testStore.createdTab=options;return {id:88,...options}},onActivated:{addListener:fn=>testStore.tabListeners.push(fn)},query: async options => {testStore.queries||=[];testStore.queries.push(options);return [{id: 1, url: location.href, title: '测试页面'}]}, sendMessage: async () => ({ok:true}) };
 const makeSelection = (id, url, title, quote) => ({id, url, title, quote, kind:'selection', start:0, end:quote.length,
   highlightColor:'#ef6a5b', highlightThickness:30, highlightOpacity:65, note:'保留笔记', createdAt:'2026-09-29T00:00:00Z'});
 testStore.data.readerMarksStyleV2 = {bookmark:{color:'#ef6a5b',thickness:4,opacity:100},highlight:{color:'#f2bd55',thickness:7,opacity:65},underline:{color:'#a78bfa',thickness:6,opacity:35,lineStyle:'wavy'}};
@@ -150,6 +150,28 @@ CHECKS = r'''
     check(!createMenu.classList.contains('hidden'),'new-selection styles share gap-crossing protection');
     move(12,12);$('#toolbar').dispatchEvent(new MouseEvent('mouseleave'));await wait(720);
     check(createMenu.classList.contains('hidden'),'new-selection settings close after a real departure');
+    finish();return;
+  }
+  if (TEST_CASE === 'popup-compat') {
+    check(!chrome.sidePanel && testStore.queries.some(value=>value.windowId===3),'compatibility list queries source window without sidePanel');
+    check(!$('#group-actions').hidden===false && all('#records .record').length===1,'compatibility list starts with original page records');
+    $('#records .record-detail').click();await pause();
+    check(!$('#detail').hidden && testStore.messages.some(message=>message.type==='LOCAL_MARKS_OPEN_RECORD'&&message.sourceWindowId===3),'compatibility details locate in source window');
+    $('#detail-note').value='兼容窗口自动保存';$('#detail-note').dispatchEvent(new Event('input'));await new Promise(resolve=>setTimeout(resolve,450));
+    check(local().note==='兼容窗口自动保存','compatibility note autosaves');
+    testStore.tabListeners.forEach(fn=>fn({windowId:3,tabId:999}));await pause();
+    check(!$('#detail').hidden,'source tab activation preserves compatibility details');
+    $('#detail-mode').value='underline-wavy';$('#detail-mode').dispatchEvent(new Event('change'));await pause();
+    check(local().underlineStyle==='wavy'&&testStore.data.readerMarksAnnotationModeV1==='underline-wavy','compatibility mode edit persists');
+    const oldQuote=$('#detail-quote').textContent;
+    testStore.listeners.forEach(fn=>fn({readerMarksPanelContext:{newValue:{windowId:4,id:'missing'}}},'session'));await pause();
+    check($('#detail-quote').textContent===oldQuote&&!$('#detail').hidden,'other source window context cannot overwrite details');
+    testStore.listeners.forEach(fn=>fn({readerMarksPanelContext:{newValue:{windowId:3,id:null}}},'session'));await pause();
+    check($('#detail').hidden,'reopening source list returns from details');
+    $('#open-page-panel').click();await pause();
+    check(testStore.createdTab?.windowId===3 && testStore.createdTab.url.includes('library=1'),'library opens in original browser window');
+    $('#collapse-panel').click();await pause();
+    check(testStore.closedWindow===1,'compatibility close removes only its own window');
     finish();return;
   }
   if (TEST_CASE === 'content-note-delete') {
@@ -612,7 +634,7 @@ def run(case):
         else:
             source = (ROOT / 'popup.html').read_text()
             source = source.replace('<head>', f'<head><base href="{ROOT.as_uri()}/">')
-            source = source.replace('<script src="backup.js">', '<script>' + MOCK + '</script><script src="record-store.js"></script><script src="backup.js">')
+            source = source.replace('<script src="backup.js">', '<script>' + MOCK + ('chrome.sidePanel=undefined;' if case=='popup-compat' else '') + '</script><script src="record-store.js"></script><script src="backup.js">')
         source += '<script>const TEST_CASE = ' + json.dumps(case) + ';' + CHECKS + '</script>'
         fixture = directory / 'fixture.html'
         fixture.write_text(source)
@@ -620,7 +642,7 @@ def run(case):
             CHROME, *(['--window-size=1200,900'] if case == 'content-hover-transit' else []), *(['--force-dark-mode'] if case == 'popup-dark' else []), '--headless=new', '--no-first-run', '--no-default-browser-check',
             '--disable-background-networking', '--disable-extensions', '--allow-file-access-from-files',
             f'--user-data-dir={directory / "profile"}', '--virtual-time-budget=14000',
-            '--dump-dom', fixture.as_uri()
+            '--dump-dom', fixture.as_uri()+('?compat=1&sourceWindowId=3' if case=='popup-compat' else '')
         ], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True)
         output = b''
         deadline = time.monotonic() + 25
@@ -652,6 +674,7 @@ def run(case):
 
 
 if __name__ == '__main__':
+    run('popup-compat')
     run('content-note-delete')
     run('content-release')
     run('popup-release')

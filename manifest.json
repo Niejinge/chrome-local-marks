@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "本地网页标记",
-  "version": "0.7.4",
+  "name": "本地网页标记（360 兼容预览）",
+  "version": "0.7.5",
   "description": "在网页上添加书签、重点标注、下划线和笔记，全部保存在本机浏览器中。",
   "icons": {
     "16": "icons/icon16.png",
@@ -10,8 +10,7 @@
     "128": "icons/icon128.png"
   },
   "permissions": [
-    "storage",
-    "sidePanel"
+    "storage"
   ],
   "host_permissions": [
     "http://*/*",
@@ -45,8 +44,6 @@
       "run_at": "document_idle"
     }
   ],
-  "minimum_chrome_version": "142",
-  "side_panel": {
-    "default_path": "popup.html"
-  }
+  "minimum_chrome_version": "132",
+  "version_name": "0.7.5-360-preview"
 }

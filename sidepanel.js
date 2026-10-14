@@ -3,19 +3,30 @@
   const $ = id => document.getElementById(id);
   const detail = $('detail'), listView = $('list-view'), editor = $('detail-style-editor');
   const theme = document.createElement('style'); theme.textContent = LocalMarksUI.css; document.head.append(theme);
-  const library = new URLSearchParams(location.search).has('library');
+  const params = new URLSearchParams(location.search);
+  const library = params.has('library');
+  const compatibility = params.has('compat');
+  const sourceWindow = Number(params.get('sourceWindowId')) || null;
+  async function contextWindowId(){return compatibility ? sourceWindow : (await chrome.windows.getCurrent()).id;}
+  if(compatibility){
+    document.body.classList.add('compatibility');
+    $('collapse-panel').textContent='×';
+    $('collapse-panel').setAttribute('aria-label','关闭标记窗口');
+    $('collapse-panel').title='关闭标记窗口';
+  }
   $('collapse-panel').hidden = library; document.body.classList.toggle('library',library);
   $('detail-delete').innerHTML = LocalMarksUI.icon('trash');
   if (!library) {
-    chrome.windows.getCurrent().then(win => chrome.runtime.sendMessage({type:'LOCAL_MARKS_PANEL_READY',windowId:win.id}));
-    chrome.sidePanel?.getLayout?.().then(layout => {
+    if(!compatibility)chrome.windows.getCurrent().then(win => chrome.runtime.sendMessage({type:'LOCAL_MARKS_PANEL_READY',windowId:win.id}));
+    const layoutRequest = compatibility ? null : chrome.sidePanel?.getLayout?.();
+    layoutRequest?.then(layout => {
       document.body.classList.toggle('collapse-left',layout.side==='left');
       $('collapse-panel').setAttribute('aria-label',layout.side==='left'?'向左收起侧栏':'向右收起侧栏');
     }).catch(()=>{});
     $('collapse-panel').addEventListener('click',async()=>{
       if(!await flush())return;
-      try{const win=await chrome.windows.getCurrent();await chrome.sidePanel.close({windowId:win.id});}
-      catch(_){$('collapse-panel').title='未能收起，请使用浏览器侧栏顶部的关闭按钮';}
+      try{const win=await chrome.windows.getCurrent();if(compatibility)await chrome.windows.remove(win.id);else await chrome.sidePanel.close({windowId:win.id});}
+      catch(_){$('collapse-panel').title=compatibility?'未能关闭，请使用窗口关闭按钮':'未能收起，请使用浏览器侧栏顶部的关闭按钮';}
     });
   }
   let selected=null, newSelection=false, targetTab=null, mode='note', config=null;
@@ -133,7 +144,7 @@
     if(!selected||newSelection)return;
     const item=selected;locating++;$('detail-navigation-status').hidden=true;
     try{
-      const result=await chrome.runtime.sendMessage({type:'LOCAL_MARKS_OPEN_RECORD',record:item});
+      const result=await chrome.runtime.sendMessage({type:'LOCAL_MARKS_OPEN_RECORD',record:item,sourceWindowId:sourceWindow});
       if(result?.ok!==true||item.kind==='selection'&&result.jumped===false)throw Error('网页内容已变化或暂时无法定位，请刷新网页后重试');
       if(token===generation&&selected?.id===item.id)targetTab=result.tabId||targetTab;
     }catch(error){if(token===generation&&selected?.id===item.id){$('detail-navigation-status').textContent=error.message||'定位失败，请重试';$('detail-navigation-status').hidden=false;}}
@@ -150,12 +161,12 @@
   document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!detail.hidden&&!event.isComposing)close();});
   window.addEventListener('marks-select',event=>select(event.detail.item,event.detail.tabId,false,event.detail.locate===true));
   async function context(value){
-    if(library||!value)return;const win=await chrome.windows.getCurrent();if(value.windowId!==win.id)return;
+    if(library||!value)return;const windowId=await contextWindowId();if(value.windowId!==windowId)return;
     if(value.draft)return select(value.draft,value.tabId,true);
     if(value.id){const data=await chrome.storage.local.get(STORAGE_KEY),item=(data[STORAGE_KEY]||[]).find(record=>record.id===value.id);if(item)await select(item,value.tabId);}
     else if(!detail.hidden)await close();
   }
-  (async()=>{if(library)return;const win=await chrome.windows.getCurrent();const data=await chrome.storage.session.get(['readerMarksPanelContext','readerMarksPanelContextsV1']);await context(data.readerMarksPanelContextsV1?.[win.id]||data.readerMarksPanelContext);})();
+  (async()=>{if(library)return;const windowId=await contextWindowId();const data=await chrome.storage.session.get(['readerMarksPanelContext','readerMarksPanelContextsV1']);await context(data.readerMarksPanelContextsV1?.[windowId]||data.readerMarksPanelContext);})();
   chrome.storage.onChanged.addListener((changes,area)=>{
     if(area==='session'&&changes.readerMarksPanelContext)context(changes.readerMarksPanelContext.newValue);
     if(area==='local'&&changes[STORAGE_KEY]&&selected){
@@ -169,7 +180,7 @@
     if(!noteDirty&&!noteInFlight&&!dirtyStyle)return;
     chrome.runtime.sendMessage({type:'LOCAL_MARKS_FINAL_SAVE',record:{...selected},allowCreate:newSelection,note:composing?selected.note:$('detail-note').value,stylePatch:dirtyStyle&&config?changes(mode,config):null,styleMode:dirtyStyle?mode:null,styleConfig:dirtyStyle&&config?{...config}:null}).catch(()=>{});
   });
-  chrome.tabs.onActivated?.addListener(async info=>{const win=await chrome.windows.getCurrent();if(!library&&info.windowId===win.id&&selected&&!locating&&info.tabId!==targetTab)close();});
+  chrome.tabs.onActivated?.addListener(async info=>{const win=await chrome.windows.getCurrent();if(!library&&!compatibility&&info.windowId===win.id&&selected&&!locating&&info.tabId!==targetTab)close();});
   chrome.storage.local.get('readerMarksEntryV1').then(data=>{const value=data.readerMarksEntryV1||{};$('entry-side').value=value.hidden?'hidden':value.side||'right';});
   $('entry-side').addEventListener('change',async()=>{const data=await chrome.storage.local.get('readerMarksEntryV1');await chrome.storage.local.set({readerMarksEntryV1:{...data.readerMarksEntryV1,hidden:$('entry-side').value==='hidden',side:$('entry-side').value==='left'?'left':'right'}});});
 })();

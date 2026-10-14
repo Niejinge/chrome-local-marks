@@ -1283,7 +1283,7 @@
     try {
       const result = await chrome.runtime.sendMessage({ type: "LOCAL_MARKS_SIDE_PANEL", id: item?.id, draft });
       if (result?.ok === false) throw Error(result.error);
-    } catch (_) { showToast("无法打开侧栏，请点击浏览器工具栏中的扩展图标"); }
+    } catch (_) { showToast("无法打开标记窗口，请点击浏览器工具栏中的扩展图标"); }
   }
   let launcherPreference = {}, nativePanelOpen = false;
   function applyLauncherPreference(value = launcherPreference) {

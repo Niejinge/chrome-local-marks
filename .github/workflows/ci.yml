@@ -1,7 +1,7 @@
 name: Checks
 on:
   push:
-    branches: [main]
+    branches: [main, 'compat/**']
   pull_request:
   workflow_dispatch:
 permissions:
@@ -21,7 +21,7 @@ jobs:
         run: |
           for file in *.js *.mjs; do node --check "$file"; done
           python3 -B -m unittest test_chrome_local_marks.py
-          for file in test_chrome_backup.mjs test_record_groups.mjs test_mark_styles.mjs test_sidepanel_background.mjs test_record_store.mjs; do node "$file"; done
+          for file in test_chrome_backup.mjs test_record_groups.mjs test_mark_styles.mjs test_sidepanel_background.mjs test_record_store.mjs test_compat_background.mjs; do node "$file"; done
       - name: Build and verify package
         run: |
           python3 -B package_release.py
@@ -30,9 +30,9 @@ jobs:
           from package_release import RELEASE_FILES
           root = pathlib.Path('.')
           version = json.loads((root / 'manifest.json').read_text())['version']
-          with zipfile.ZipFile(root / 'dist' / f'chrome-local-marks-release-{version}.zip') as archive:
+          with zipfile.ZipFile(root / 'dist' / f'chrome-local-marks-360-preview-{version}.zip') as archive:
               assert set(archive.namelist()) == set(RELEASE_FILES)
               assert 'LICENSE' in archive.namelist()
               for name in archive.namelist():
-                  assert archive.read(name) == (root / 'dist/chrome-local-marks-unpacked' / name).read_bytes()
+                  assert archive.read(name) == (root / 'dist/chrome-local-marks-360-unpacked' / name).read_bytes()
           PY

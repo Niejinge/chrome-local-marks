@@ -12,7 +12,7 @@ try{
  const [port,endpoint]=portFile.trim().split('\n');socket=new WebSocket('ws://127.0.0.1:'+port+endpoint);await new Promise((r,j)=>{socket.addEventListener('open',r);socket.addEventListener('error',j)});
  let seq=0;const pending=new Map(),events=[];socket.addEventListener('message',event=>{const value=JSON.parse(event.data);if(value.id){const entry=pending.get(value.id);if(entry){pending.delete(value.id);value.error?entry.reject(Error(JSON.stringify(value.error))):entry.resolve(value.result)}}else events.push(value)});
  const call=(method,params={},sessionId)=>new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,reject});socket.send(JSON.stringify({id,method,params,...(sessionId?{sessionId}:{})}))});
- const loaded=await call('Extensions.loadUnpacked',{path:root+'/dist/chrome-local-marks-unpacked'});console.log('Extension loaded',JSON.stringify(loaded));
+ const loaded=await call('Extensions.loadUnpacked',{path:root+'/dist/chrome-local-marks-360-unpacked'});console.log('Extension loaded',JSON.stringify(loaded));
  const extensionId=loaded.id;const target=await call('Target.createTarget',{url:'http://127.0.0.1:'+server.address().port+'/article'});const attached=await call('Target.attachToTarget',{targetId:target.targetId,flatten:true});const session=attached.sessionId;
  const evaluate=async(expression,sessionId=session)=>{const result=await call('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true},sessionId);if(result.exceptionDetails)throw Error(JSON.stringify(result.exceptionDetails));return result.result.value};
  for(let i=0;i<40&&!await evaluate("!!document.querySelector('#local-reader-marks-host')");i++)await sleep(100);
@@ -64,17 +64,21 @@ try{
  const active=versions.findLast(x=>x.runningStatus==='running');if(active){await call('ServiceWorker.stopWorker',{versionId:active.versionId},session);await sleep(200);}
  await evaluate("(async()=>LocalMarksData.mutate({op:'upsert',record:(await chrome.storage.local.get('readerMarksV1')).readerMarksV1[0],patch:{note:'后台重启后仍可保存'},allowCreate:false}))()",panelSession);
  const after=await evaluate("chrome.storage.local.get('readerMarksV1')",panelSession);if(after.readerMarksV1[0].note!=='后台重启后仍可保存')throw Error('Worker restart save failed');checks.push(active?'worker stop/restart and save':'worker save after lifecycle check');
+ const debugWorker=(await call('Target.getTargets')).targetInfos.find(x=>x.url==='chrome-extension://'+extensionId+'/background.js');
+ const debugSession=debugWorker?(await call('Target.attachToTarget',{targetId:debugWorker.targetId,flatten:true})).sessionId:null;
+ if(debugSession)await call('Runtime.enable',{},debugSession);
  await call('Target.activateTarget',{targetId:target.targetId});
  await evaluate("scrollTo(0,600)");await sleep(150);const originalScroll=await evaluate('scrollY');
  try{const tabTargets=(await call('Target.getTargets',{filter:[{type:'tab',exclude:false},{exclude:true}]})).targetInfos;const actionTab=tabTargets.find(x=>x.url.includes('/article'));await call('Extensions.triggerAction',{id:extensionId,targetId:actionTab?.targetId||target.targetId});}catch(_){}await sleep(500);
  let targets=(await call('Target.getTargets')).targetInfos;
- let side=targets.find(x=>x.url==='chrome-extension://'+extensionId+'/popup.html');
+ let side=targets.find(x=>x.url.startsWith('chrome-extension://'+extensionId+'/popup.html?compat=1'));
  if(!side){
    const pos=await evaluate("(()=>{const r=document.querySelector('#local-reader-marks-host').shadowRoot.querySelector('#launcher').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()");
    await call('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...pos},session);await call('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...pos},session);await sleep(500);
-   targets=(await call('Target.getTargets')).targetInfos;side=targets.find(x=>x.url==='chrome-extension://'+extensionId+'/popup.html');
+   targets=(await call('Target.getTargets')).targetInfos;side=targets.find(x=>x.url.startsWith('chrome-extension://'+extensionId+'/popup.html?compat=1'));
  }
- if(!side)throw Error('Native side panel did not open');
+ if(!side)throw Error('Compatibility window did not open: '+JSON.stringify({targets:targets.map(x=>({url:x.url,type:x.type})),logs:events.filter(x=>x.method==='Runtime.consoleAPICalled').map(x=>x.params.args.map(a=>a.description||a.value)),state:await evaluate("chrome.storage.session.get(null)",panelSession),ui:await evaluate("(()=>{const ui=document.querySelector('#local-reader-marks-host').shadowRoot;return {toast:ui.querySelector('#toast').textContent,launcher:ui.querySelector('#launcher').outerHTML,rect:ui.querySelector('#launcher').getBoundingClientRect().toJSON()}})()")}));
+ if(targets.filter(x=>x.url.startsWith('chrome-extension://'+extensionId+'/popup.html?compat=1')).length!==1)throw Error('Duplicate compatibility windows');
  const sideSession=(await call('Target.attachToTarget',{targetId:side.targetId,flatten:true})).sessionId;
  if(Math.abs((await evaluate('scrollY'))-originalScroll)>5)throw Error('Opening native panel lost reading position');
  await evaluate("document.querySelector('#detail-close').click()",sideSession);await sleep(100);
@@ -84,10 +88,13 @@ try{
  if((await evaluate('scrollY'))>300)throw Error('List selection did not locate the bookmark');
  checks.push('native list selection opens detail and jumps to bookmark without closing detail');
 
- checks.push('native side panel open preserves reading position');
+ checks.push('compatibility window opens without moving reading position');
+ if(!await evaluate("document.querySelector('#current-page-title').textContent==='原生扩展验收'",sideSession))throw Error('Compatibility view uses wrong source tab');checks.push('compatibility view uses original browser tab');
  await evaluate("document.querySelector('#collapse-panel').click()",sideSession);await sleep(400);
  const panelState=await evaluate("chrome.storage.session.get('readerMarksPanelWindows')",panelSession);
- if(Object.values(panelState.readerMarksPanelWindows||{}).some(Boolean))throw Error('Native panel visibility did not close');checks.push('native panel close and visibility sync');
+ if(Object.values(panelState.readerMarksPanelWindows||{}).some(Boolean))throw Error('Native panel visibility did not close');checks.push('compatibility window closes and keeps page entry available');
+ const compatState=await evaluate("chrome.storage.session.get('readerMarksCompatWindowsV1')",panelSession);
+ if(Object.keys(compatState.readerMarksCompatWindowsV1||{}).length)throw Error('Closed compatibility window still registered');
  const articleUrl='http://127.0.0.1:'+server.address().port+'/article';
  const paragraphs=await evaluate("[...document.querySelectorAll('p')].slice(1).map(p=>p.textContent)");
  const began=Date.now();
@@ -135,7 +142,7 @@ try{
  let restartedPort;for(let i=0;i<100;i++){try{restartedPort=await fs.readFile(path.join(profile,'DevToolsActivePort'),'utf8');break}catch{}await sleep(100)}if(!restartedPort)throw Error('Browser restart did not expose endpoint');
  const [rport,rendpoint]=restartedPort.trim().split('\n');socket=new WebSocket('ws://127.0.0.1:'+rport+rendpoint);await new Promise((r,j)=>{socket.addEventListener('open',r);socket.addEventListener('error',j)});
  socket.addEventListener('message',event=>{const value=JSON.parse(event.data);if(value.id){const entry=pending.get(value.id);if(entry){pending.delete(value.id);value.error?entry.reject(Error(JSON.stringify(value.error))):entry.resolve(value.result)}}else events.push(value)});
- const reload=await call('Extensions.loadUnpacked',{path:root+'/dist/chrome-local-marks-unpacked'});if(reload.id!==extensionId)throw Error('Extension identity changed');
+ const reload=await call('Extensions.loadUnpacked',{path:root+'/dist/chrome-local-marks-360-unpacked'});if(reload.id!==extensionId)throw Error('Extension identity changed');
  const reopened=await call('Target.createTarget',{url:'chrome-extension://'+extensionId+'/popup.html?library=1'});const reopenedSession=(await call('Target.attachToTarget',{targetId:reopened.targetId,flatten:true})).sessionId;await sleep(300);
  const savedAfterRestart=await evaluate("chrome.storage.local.get('readerMarksV1')",reopenedSession);if(JSON.stringify(savedAfterRestart.readerMarksV1)!==JSON.stringify(savedBeforeRestart.readerMarksV1))throw Error('Records changed after browser restart');checks.push('browser restart and extension reload preserve complete records');
  console.log(JSON.stringify({passed:checks.length,checks}));

@@ -5,24 +5,24 @@
 ## 发布步骤
 
 1. 更新 `manifest.json` 版本及 `CHANGELOG.md`，执行基础、界面和真实扩展测试。
-2. 运行 `python3 -B package_release.py`，从固定目录 `dist/chrome-local-marks-unpacked` 验证安装。
+2. 运行 `python3 -B package_release.py`，从固定目录 `dist/chrome-local-marks-360-unpacked` 验证安装。
 3. 核对 ZIP 根目录包含 `manifest.json`、运行文件和 `LICENSE`，不包含测试、文档、缓存、密钥或私人数据。
 4. 提交并推送代码，创建对应 `v<版本>` 标签。
 5. 创建 GitHub Release，上传版本 ZIP、稳定文件名 ZIP 与 SHA-256 校验文件。
 
 ```sh
-# 以 0.7.4 为例；后续替换为 manifest.json 中的实际版本。
-cp dist/chrome-local-marks-release-0.7.4.zip dist/chrome-local-marks.zip
-python3 -B -c "from pathlib import Path; import hashlib; p=Path('dist/chrome-local-marks.zip'); Path('dist/SHA256SUMS.txt').write_text(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n')"
-git tag v0.7.4
-git push origin v0.7.4
-gh release create v0.7.4 --verify-tag --title 'v0.7.4' --notes-file .local-maintainer/release-notes.md \
-  dist/chrome-local-marks-release-0.7.4.zip dist/chrome-local-marks.zip dist/SHA256SUMS.txt
+# 以 0.7.5 为例；后续替换为 manifest.json 中的实际版本。
+cp dist/chrome-local-marks-360-preview-0.7.5.zip dist/chrome-local-marks-360-preview.zip
+python3 -B -c "from pathlib import Path; import hashlib; p=Path('dist/chrome-local-marks-360-preview.zip'); Path('dist/SHA256SUMS.txt').write_text(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n')"
+git tag v0.7.5-360-preview
+git push origin v0.7.5-360-preview
+gh release create v0.7.5-360-preview --verify-tag --prerelease --title 'v0.7.5 360 兼容预览' --notes-file .local-maintainer/release-notes.md \
+  dist/chrome-local-marks-360-preview-0.7.5.zip dist/chrome-local-marks-360-preview.zip dist/SHA256SUMS.txt
 ```
 
 `.local-maintainer/release-notes.md` 是本次发布准备的临时说明文件（先创建该本地目录），概述变化、安装方法与已知限制。命令中的旧标签仅为示例，已有版本不可重复发布或移动标签。
 
-稳定文件名 `chrome-local-marks.zip` 使 README 的 `/releases/latest/download/chrome-local-marks.zip` 链接始终指向最新版。GitHub 自动生成的源码归档不等同于可加载的插件 ZIP。
+兼容包使用独立文件名并仅以 prerelease 发布，不改变 Chrome 稳定版的 `/releases/latest` 下载入口。GitHub 自动生成的源码归档不等同于可加载的插件 ZIP。
 
 ## 产物与版本边界
 

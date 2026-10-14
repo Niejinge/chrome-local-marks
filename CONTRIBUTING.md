@@ -1,6 +1,6 @@
 # 参与贡献
 
-欢迎反馈问题、改进交互、完善兼容性、文档和测试。使用 Node.js 22 或更新版本、Python 3.10 或更新版本；浏览器验证需要 Chrome 142 或更新版本。运行时无需安装 npm 依赖。
+欢迎反馈问题、改进交互、完善兼容性、文档和测试。使用 Node.js 22 或更新版本、Python 3.10 或更新版本；兼容目标为 Chromium 132，自动化真实扩展检查使用支持扩展调试协议的 Chrome 测试环境，360 实际安装与操作另行验证。运行时无需安装 npm 依赖。
 
 ## 提交问题
 
@@ -10,7 +10,7 @@
 
 1. Fork 仓库并创建独立分支。
 2. 运行 `python3 -B package_release.py`。
-3. 在 `chrome://extensions/` 加载 `dist/chrome-local-marks-unpacked`。
+3. 在 `chrome://extensions/` 加载 `dist/chrome-local-marks-360-unpacked`。
 4. 修改源码后重新打包，在 Chrome 中重新加载扩展并刷新测试网页。
 
 不要直接加载源码目录，测试缓存和开发文件可能导致 Chrome 拒绝加载。`dist/` 为生成文件，不提交到源码；下载包通过 Releases 分发。
@@ -20,9 +20,9 @@
 | 文件 | 作用 |
 |---|---|
 | `content.js` | 网页选区、标记恢复、工具条、笔记浮层与定位 |
-| `background.js` | 后台消息、网页跳转及侧栏上下文 |
+| `background.js` | 后台消息、网页跳转及来源窗口上下文 |
 | `record-store.js` / `store-client.js` | 记录写入队列、并发合并、撤销与容量检查 |
-| `popup.html` / `popup.js` / `popup.css` | 原生侧栏及独立管理页列表 |
+| `popup.html` / `popup.js` / `popup.css` | 兼容管理窗口及独立管理页列表 |
 | `sidepanel.js` | 详情、笔记与样式自动保存 |
 | `ui.js` / `mark-styles.js` / `record-groups.js` | 共用 UI、样式偏好及分组 |
 | `backup.js` | JSON 备份校验与合并 |
@@ -40,6 +40,7 @@ node test_record_groups.mjs
 node test_mark_styles.mjs
 node test_sidepanel_background.mjs
 node test_record_store.mjs
+node test_compat_background.mjs
 ```
 
 界面回归和真实扩展检查：
