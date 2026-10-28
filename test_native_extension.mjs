@@ -17,9 +17,33 @@ try{
  const evaluate=async(expression,sessionId=session)=>{const result=await call('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true},sessionId);if(result.exceptionDetails)throw Error(JSON.stringify(result.exceptionDetails));return result.result.value};
  for(let i=0;i<40&&!await evaluate("!!document.querySelector('#local-reader-marks-host')");i++)await sleep(100);
  if(!await evaluate("!!document.querySelector('#local-reader-marks-host')"))throw Error('Content script not injected');checks.push('real manifest injection');
+ // A custom editor sets its caret during mousedown, as many rich text editors do.
+ await evaluate(`(()=>{const e=document.createElement('div');e.id='input-regression';e.contentEditable='true';e.textContent='abc';document.body.prepend(e);e.addEventListener('mousedown',event=>{event.preventDefault();e.focus();const r=document.createRange();r.selectNodeContents(e);r.collapse(false);getSelection().removeAllRanges();getSelection().addRange(r);});e.dispatchEvent(new MouseEvent('mousedown',{bubbles:true}));})()`);
+ await call('Input.dispatchKeyEvent',{type:'keyDown',key:'x',code:'KeyX',windowsVirtualKeyCode:88,text:'x'},session);
+ await call('Input.dispatchKeyEvent',{type:'keyUp',key:'x',code:'KeyX',windowsVirtualKeyCode:88},session);
+ if(await evaluate("document.querySelector('#input-regression').textContent")!=='abcx')throw Error('Extension moved the editor caret on a zero-mark page');
+ await call('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r'},session);
+ await call('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13},session);
+ if(!await evaluate("document.querySelector('#input-regression').innerHTML.includes('<div>') || document.querySelector('#input-regression').innerHTML.includes('<br')"))throw Error('Editor Enter failed');
+ await evaluate("document.querySelector('#input-regression').remove()");checks.push('zero-mark host editor preserves caret, typing and Enter');
+
  await evaluate("(()=>{const r=document.createRange();r.selectNodeContents(document.querySelector('#sample'));getSelection().removeAllRanges();getSelection().addRange(r);document.querySelector('#sample').dispatchEvent(new MouseEvent('mouseup',{bubbles:true}))})()");await sleep(100);
  await evaluate("document.querySelector('#local-reader-marks-host').shadowRoot.querySelector('#add-bookmark').click()");await sleep(400);
  if(!await evaluate("!!document.querySelector('mark[data-local-reader-mark]')"))throw Error('Bookmark did not render');checks.push('real service worker bookmark save and render');
+ // Host sites often handle shortcuts at document level; note typing must stay local.
+ await evaluate(`(()=>{const background=document.createElement('textarea');background.id='host-page-editor';document.body.append(background);window.noteHostKeyCount=0;window.noteHostShortcut=event=>{if(['w','x','t','/','.'].includes(event.key)){window.noteHostKeyCount++;background.focus();}};document.addEventListener('keydown',window.noteHostShortcut);const ui=document.querySelector('#local-reader-marks-host').shadowRoot;document.querySelector('#sample mark').click();ui.querySelector('#quick-note').click();})()`);
+ await call('Input.dispatchKeyEvent',{type:'keyDown',key:'w',code:'KeyW',windowsVirtualKeyCode:87,text:'w'},session);
+ await call('Input.dispatchKeyEvent',{type:'keyUp',key:'w',code:'KeyW',windowsVirtualKeyCode:87},session);await sleep(500);
+ if(!await evaluate(`(()=>{const ui=document.querySelector('#local-reader-marks-host').shadowRoot;return ui.activeElement===ui.querySelector('#note-composer-text') && ui.querySelector('#quick').classList.contains('open') && ui.querySelector('#note-composer-text').value==='w' && document.querySelector('#host-page-editor').value==='' && window.noteHostKeyCount===0})()`))throw Error('Note typing escaped to host webpage and closed composer: '+JSON.stringify(await evaluate(`(()=>{const ui=document.querySelector('#local-reader-marks-host').shadowRoot;return {active:ui.activeElement?.id,open:ui.querySelector('#quick').className,note:ui.querySelector('#note-composer-text').value,background:document.querySelector('#host-page-editor').value,hostKeys:window.noteHostKeyCount}})()`)));
+
+ await call('Input.imeSetComposition',{text:'中',selectionStart:1,selectionEnd:1},session);
+ await evaluate(`(()=>{const ui=document.querySelector('#local-reader-marks-host').shadowRoot;ui.querySelector('#note-composer-text').dispatchEvent(new KeyboardEvent('keyup',{key:'ArrowDown',bubbles:true,composed:true}));document.querySelector('#sample mark').dispatchEvent(new MouseEvent('mouseover',{bubbles:true}));})()`);await sleep(800);
+ if(!await evaluate(`(()=>{const ui=document.querySelector('#local-reader-marks-host').shadowRoot;return ui.activeElement===ui.querySelector('#note-composer-text') && ui.querySelector('#quick').classList.contains('open') && ui.querySelector('#note-composer-text').value.includes('中')})()`))throw Error('IME candidate navigation or underlying note hover hid composer');
+ await call('Input.insertText',{text:'中文'},session);await sleep(500);
+ checks.push('native IME input and candidate navigation keep note focus while hover timers run');
+ await evaluate(`(()=>{document.removeEventListener('keydown',window.noteHostShortcut);document.querySelector('#host-page-editor').remove();const ui=document.querySelector('#local-reader-marks-host').shadowRoot;ui.querySelector('#note-composer-text').blur();})()`);await sleep(150);
+ checks.push('native first note keystroke stays in composer without triggering host shortcut');
+
  const panel=await call('Target.createTarget',{url:'chrome-extension://'+extensionId+'/popup.html?library=1'});const panelSession=(await call('Target.attachToTarget',{targetId:panel.targetId,flatten:true})).sessionId;
  for(let i=0;i<40&&!await evaluate("!!document.querySelector('.record-detail')",panelSession);i++)await sleep(100);
  if(!await evaluate("[...document.querySelectorAll('.record-group details')].every(el=>!el.open)",panelSession))throw Error('Groups should default collapsed');checks.push('native grouped list defaults collapsed');
@@ -129,6 +153,29 @@ try{
  const quotaAfter=await evaluate("chrome.storage.local.get('readerMarksV1')",panelSession);
  if(JSON.stringify(quotaBefore)!==JSON.stringify(quotaAfter))throw Error('Quota rejection altered saved records');
  await evaluate("chrome.storage.local.remove('quotaProbe')",panelSession);checks.push('real 10 MB quota boundary rejects without changing saved records');
+
+ // Restore must ignore editor-owned text, even when old/imported records match it.
+ const editorFixtures=[['empty','<div contenteditable>editor-empty</div>'],['plain','<div contenteditable="plaintext-only">editor-plain</div>'],['true','<div contenteditable="true"><span>editor-true</span></div>'],['monaco','<div class="monaco-editor"><span>editor-monaco</span><textarea></textarea></div>'],['grid','<div role="grid"><div>editor-grid</div></div>'],['cm','<div class="cm-editor">editor-cm</div>']];
+ for(const [name,html] of editorFixtures){
+   await evaluate(`(()=>{const box=document.createElement('section');box.id='protected-'+${JSON.stringify(name)};box.innerHTML=${JSON.stringify(html)};document.body.append(box)})()`);
+   const record={id:'editor-'+name,kind:'selection',url:'http://127.0.0.1:'+server.address().port+'/article',title:'input protection',quote:'editor-'+name,prefix:'',suffix:'',start:0,end:11,highlightColor:'#ffdd00',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
+   await evaluate('LocalMarksData.mutate('+JSON.stringify({op:'upsert',record,allowCreate:true})+')',panelSession);await sleep(200);
+   if(await evaluate(`!!document.querySelector('#protected-${name} mark')`))throw Error('Mark inserted in '+name+' editor');
+   await evaluate(`(()=>{const el=document.querySelector('#protected-${name}').firstElementChild;const r=document.createRange();r.selectNodeContents(el);getSelection().removeAllRanges();getSelection().addRange(r);el.dispatchEvent(new MouseEvent('mouseup',{bubbles:true}));})()`);await sleep(80);
+   if(await evaluate("document.querySelector('#local-reader-marks-host').shadowRoot.querySelector('#toolbar').classList.contains('visible')"))throw Error('Annotation toolbar opened in '+name+' editor');
+   await evaluate('LocalMarksData.mutate('+JSON.stringify({op:'delete',ids:[record.id]})+')',panelSession);
+ }
+ checks.push('restore and selection exclude empty/plain/true contenteditable, Monaco, CodeMirror and grid');
+ await evaluate(`(()=>{const ui=document.querySelector('#local-reader-marks-host').shadowRoot;document.querySelector('#sample mark').click();ui.querySelector('#quick-note').click();const note=ui.querySelector('#note-composer-text');note.value+=' input protection';note.dispatchEvent(new Event('input'));const editor=document.querySelector('#protected-true [contenteditable]');editor.focus();const range=document.createRange();range.selectNodeContents(editor);range.collapse(false);getSelection().removeAllRanges();getSelection().addRange(range);editor.dispatchEvent(new MouseEvent('mousedown',{bubbles:true}));})()`);await sleep(800);
+ if(!await evaluate("getSelection().rangeCount===1 && document.querySelector('#protected-true').contains(getSelection().anchorNode) && document.activeElement.isContentEditable"))throw Error('Note autosave cleared the new editor caret');
+ checks.push('leaving note during autosave preserves newly focused host editor caret');
+ await evaluate("document.activeElement.blur()");await sleep(250);
+
+ await evaluate(`(()=>{const e=document.querySelector('#protected-true [contenteditable]');e.focus();const r=document.createRange();r.selectNodeContents(e);r.collapse(false);getSelection().removeAllRanges();getSelection().addRange(r);window.originalArticleMark=document.querySelector('#sample mark');e.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}));document.querySelector('#sample').append(document.createTextNode(' updated'));})()`);await sleep(900);
+ if(!await evaluate("window.originalArticleMark===document.querySelector('#sample mark') && getSelection().rangeCount===1"))throw Error('Article redraw interrupted active editor composition');
+ await evaluate("document.querySelector('#protected-true [contenteditable]').dispatchEvent(new CompositionEvent('compositionend',{bubbles:true}));document.activeElement.blur()");await sleep(300);
+ if(!await evaluate("window.originalArticleMark!==document.querySelector('#sample mark') && !!document.querySelector('#sample mark')"))throw Error('Deferred article marks did not restore after editing');
+ await evaluate("document.querySelectorAll('[id^=protected-]').forEach(e=>e.remove())");checks.push('composition preserves editor selection; deferred article restore resumes on blur');
  const savedBeforeRestart=await evaluate("chrome.storage.local.get('readerMarksV1')",panelSession);
  socket.close();const exited=new Promise(r=>browser.once('exit',r));browser.kill('SIGTERM');await exited;await fs.rm(path.join(profile,'DevToolsActivePort'),{force:true});
  browser=spawn(chromeBin,['--headless=new','--no-first-run','--disable-background-networking','--enable-unsafe-extension-debugging','--remote-debugging-port=0','--remote-allow-origins=*','--user-data-dir='+profile],{stdio:'ignore'});

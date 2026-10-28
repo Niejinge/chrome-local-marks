@@ -83,6 +83,7 @@
       @media(prefers-reduced-motion:reduce){.launcher,.panel,.toast{transition:none}}
       .quick{display:flex;flex-wrap:wrap;max-width:min(340px,calc(100vw - 24px));opacity:0;visibility:hidden;pointer-events:none;translate:0 4px;transition:opacity 140ms ease,translate 140ms ease,visibility 140ms}
       .quick.open{opacity:1;visibility:visible;pointer-events:auto;translate:0 0}
+      .quick.open.editing-note{transition:none;visibility:visible}
       .quick-mode-menu,.mark-submenu{transition:opacity 140ms ease,translate 140ms ease,visibility 140ms;opacity:1;translate:0 0;visibility:visible}
       .quick-mode-menu.hidden{display:grid!important;opacity:0;visibility:hidden;pointer-events:none;translate:0 4px}
       .mark-submenu.hidden{display:flex!important;max-height:0;margin-top:0;padding-block:0;border-top:0;overflow:hidden;opacity:0;visibility:hidden;pointer-events:none;translate:0 4px}
@@ -402,11 +403,45 @@
     }
   }
 
+  // Never treat editor-owned DOM as article text, including rendered code/cells.
+  const editorSelector = 'input,textarea,select,option,[role="textbox"],[role="searchbox"],[role="combobox"],[role="grid"],[role="treegrid"],.monaco-editor,.CodeMirror,.cm-editor,.ace_editor';
+  function isEditingArea(node) {
+    if (document.designMode.toLowerCase() === "on") return true;
+    let element = node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
+    while (element) {
+      if (element === host) return false;
+      if (element.isContentEditable || element.matches(editorSelector)) return true;
+      const editable = element.getAttribute('contenteditable');
+      if (editable !== null && editable.toLowerCase() !== 'false') return true;
+      element = element.parentElement || element.getRootNode()?.host;
+    }
+    return false;
+  }
+
   function isExcluded(node) {
     const parent = node.parentElement;
-    if (!parent || host.contains(parent)) return true;
-    if (parent.closest("script,style,noscript,textarea,input,select,option,[contenteditable=true]")) return true;
-    return false;
+    return !parent || host.contains(parent) || isEditingArea(parent)
+      || Boolean(parent.closest("script,style,noscript"));
+  }
+
+  function rangeTouchesEditor(range) {
+    if (isEditingArea(range.startContainer) || isEditingArea(range.endContainer)) return true;
+    const ancestor = range.commonAncestorContainer;
+    if (!ancestor.querySelectorAll) return false;
+    return [...ancestor.querySelectorAll(editorSelector + ',[contenteditable]')]
+      .some(element => isEditingArea(element) && range.intersectsNode(element));
+  }
+
+  let pageComposing = false;
+  let deferredRender = false;
+  function pageIsEditing() {
+    let active = document.activeElement;
+    if (active === host) return false;
+    while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
+    return pageComposing || isEditingArea(active);
+  }
+  function flushDeferredRender() {
+    if (deferredRender && !pageIsEditing()) renderMarks();
   }
 
   function textMap() {
@@ -428,7 +463,7 @@
 
   function removeMarks() {
     document.querySelectorAll("mark[data-local-reader-mark]").forEach((mark) => {
-      mark.replaceWith(document.createTextNode(mark.textContent || ""));
+      if (!isEditingArea(mark)) mark.replaceWith(document.createTextNode(mark.textContent || ""));
     });
   }
 
@@ -627,6 +662,8 @@
   }
 
   function renderMarks() {
+    if (pageIsEditing()) { deferredRender = true; return; }
+    deferredRender = false;
     ignoreMutationsUntil = Date.now() + 160;
     hideNoteTooltip();
     removeMarks();
@@ -895,10 +932,11 @@
   }
 
   function prepareSelection() {
+    if (noteComposerTarget) return;
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed || !selection.rangeCount) return hideToolbar();
     const range = selection.getRangeAt(0);
-    if (host.contains(range.commonAncestorContainer)) return hideToolbar();
+    if (host.contains(range.commonAncestorContainer) || pageIsEditing() || rangeTouchesEditor(range)) return hideToolbar();
     const quote = selection.toString().trim();
     if (!quote || quote.length > 2000) return hideToolbar();
     const map = textMap();
@@ -982,7 +1020,6 @@
     const item = { ...(exact || pendingSelection), ...changes, updatedAt: now() };
     await saveRecord(item,{...changes,start:item.start,end:item.end,quote:item.quote,prefix:item.prefix,suffix:item.suffix},LocalMarksStyles.annotationModes.includes(modeForItem(changes))?modeForItem(changes):null);
     toolbarPreviewBackup = null;
-    window.getSelection()?.removeAllRanges();
     pendingSelection = null;
     pendingRect = null;
     hideToolbar();
@@ -1013,7 +1050,8 @@
     noteComposer.classList.remove("hidden");
     container.appendChild(noteComposer);
     if (container === quick) {
-      quick.classList.add("open");
+      setQuickMenu(null);
+      quick.classList.add("open", "editing-note");
       positionQuick(document.querySelector(`mark[data-local-reader-mark="${escapeSelector(item.id)}"]`));
     } else {
       setCreateMenu(null);
@@ -1052,7 +1090,7 @@
     noteSaveQueue = job;
     return job.then(ok => {
       if (ok && close && noteComposerTarget?.id === target.id) {
-        noteComposer.classList.add('hidden'); noteComposerTarget = null; noteComposerContainer = null;
+        noteComposer.classList.add('hidden'); quick.classList.remove('editing-note'); noteComposerTarget = null; noteComposerContainer = null;
         pendingSelection = null; pendingRect = null; hideToolbar();
       }
       return ok;
@@ -1081,7 +1119,7 @@
       const result = await job;
       if (composerMatches && noteComposerTarget?.id === id) {
         noteComposerTarget = null;noteComposerContainer = null;
-        noteComposerText.value = '';noteComposer.classList.add('hidden');
+        noteComposerText.value = '';noteComposer.classList.add('hidden');quick.classList.remove('editing-note');
         pendingSelection = null;pendingRect = null;hideToolbar();
       }
       hideNoteTooltip();quick.classList.remove('open');
@@ -1107,7 +1145,6 @@
     if (clearPending) {
       pendingSelection = null;
       pendingRect = null;
-      window.getSelection()?.removeAllRanges();
     }
   }
 
@@ -1229,6 +1266,7 @@
 
   let noteId = null;
   function showNoteTooltip(mark) {
+    if (noteComposerTarget) return;
     const item = records.find(record => record.id === mark.dataset.localReaderMark);
     if (!item?.note?.trim()) return;
     noteId = item.id;
@@ -1262,6 +1300,7 @@
   document.addEventListener("mousemove", event => { pointerPosition = {x:event.clientX,y:event.clientY}; });
   function cancelHover() { clearTimeout(noteHoverTimer); clearTimeout(editHoverTimer); hoverKey = null; }
   function beginHover(mark, isNote = false, event) {
+    if (noteComposerTarget) return;
     if (event && quickTransit?.travelling(event)) return;
     isNote = isNote || isNoteOnlyMark(mark);
     cancelQuickHide();
@@ -1494,7 +1533,13 @@
       buttons.forEach((candidate) => { candidate.disabled = false; });
     }
   });
+  // Shadow DOM retargets events but does not stop them reaching site shortcuts.
+  // Keep plugin typing local without cancelling normal input or IME defaults.
+  for (const type of ['keyup', 'keypress', 'beforeinput', 'input', 'compositionstart', 'compositionupdate', 'compositionend']) {
+    root.addEventListener(type, event => event.stopPropagation());
+  }
   root.addEventListener("keydown", (event) => {
+    event.stopPropagation();
     if (event.key !== "Escape") return;
     if (noteComposerTarget) {
       commitNoteComposer().then(ok => { if(ok) quick.classList.remove('open'); });
@@ -1676,7 +1721,6 @@
   $('#quick-edit').addEventListener('click', showQuickModeMenu);
   $("#quick-note").addEventListener("click", () => {
     const item = records.find((record) => record.id === quickId);
-    quick.classList.remove("open");
     if (item) openNote(item);
   });
   $("#quick-delete").addEventListener("click", async () => {
@@ -1684,6 +1728,16 @@
     quick.classList.remove("open");
     if (id) await deleteRecordWithFeedback(id);
   });
+
+  document.addEventListener("compositionstart", event => {
+    if (!event.composedPath().includes(host)) pageComposing = true;
+  }, true);
+  document.addEventListener("compositionend", event => {
+    if (event.composedPath().includes(host)) return;
+    pageComposing = false;
+    setTimeout(flushDeferredRender, 0);
+  }, true);
+  document.addEventListener("focusout", () => setTimeout(flushDeferredRender, 0), true);
 
   document.addEventListener("mouseup", (event) => {
     if (event.composedPath().includes(host)) return;
@@ -1699,7 +1753,6 @@
     hideToolbar();
     pendingSelection = null;
     pendingRect = null;
-    window.getSelection()?.removeAllRanges();
     if (!event.target.closest?.("mark[data-local-reader-mark]")) {
       quick.classList.remove("open");
       hideNoteTooltip();
@@ -1813,7 +1866,7 @@
     if (Date.now() < ignoreMutationsUntil || !pageRecords().some((item) => item.kind === "selection")) return;
     const meaningful = mutations.some((mutation) => {
       const target = mutation.target.nodeType === Node.ELEMENT_NODE ? mutation.target : mutation.target.parentElement;
-      return target && !host.contains(target) && !target.closest?.("mark[data-local-reader-mark]");
+      return target && !host.contains(target) && !isEditingArea(target) && !target.closest?.("mark[data-local-reader-mark]");
     });
     if (!meaningful) return;
     clearTimeout(restoreTimer);
